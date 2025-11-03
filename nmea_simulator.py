@@ -700,47 +700,92 @@ class NMEASimulator:
     def _init_ais_targets(self) -> None:
         self.ais_targets = []
         for i in range(self.ais_num_targets):
-            # Random point within a circle of radius ais_distribution_radius_nm (uniform area)
+            # Random small offset around own ship position (in nm), uniform in area up to ais_distribution_radius_nm
             r = math.sqrt(random.random()) * self.ais_distribution_radius_nm
             theta = random.uniform(0, 2 * math.pi)
-            dx_nm = r * math.cos(theta)
-            dy_nm = r * math.sin(theta)
-            dlat = dy_nm / 60.0
-            lat_for_lon = max(-89.99, min(89.99, self.lat))
-            cos_lat = math.cos(math.radians(lat_for_lon)) or 1e-6
-            dlon = dx_nm / (60.0 * cos_lat)
+            dx_nm = r * math.cos(theta)  # east-west in nautical miles
+            dy_nm = r * math.sin(theta)  # north-south in nautical miles
+
             mmsi = 999000001 + i
+            # Default seeding values; will be updated each tick
             sog = max(0.0, self.sog + random.uniform(-self.ais_max_sog_offset, self.ais_max_sog_offset))
             cog = (self.cog + random.uniform(-self.ais_max_cog_offset, self.ais_max_cog_offset)) % 360
-            self.ais_targets.append({
+
+            t = {
                 "mmsi": mmsi,
-                "lat": self.lat + dlat,
-                "lon": self.lon + dlon,
+                "lat": self.lat,
+                "lon": self.lon,
                 "sog": sog,
                 "cog": cog,
                 "hdg": cog,
                 "name": self._make_vessel_name(i),
-            })
+                # GPX-follow parameters
+                "dx_nm": dx_nm,
+                "dy_nm": dy_nm,
+            }
+            # Assign an offset along GPX if available
+            if self._gpx_track:
+                if self._gpx_start_time and self._gpx_end_time and all(p.get("time") is not None for p in self._gpx_track):
+                    # Time-based offset within +/- 60s scaled by duration
+                    total_s = max(1, int((self._gpx_end_time - self._gpx_start_time).total_seconds()))
+                    # choose offset in a range proportional to duration but limited
+                    max_off = min(300, max(30, total_s // 20))
+                    t["gpx_time_offset_s"] = random.randint(-max_off, max_off)
+                else:
+                    # Index offset within +/- 50 points (bounded by track length)
+                    t["gpx_index_offset"] = random.randint(-50, 50)
+            self.ais_targets.append(t)
 
     def _update_ais_targets(self, dt_hours: float) -> None:
-        for t in self.ais_targets:
-            # Nudge towards own ship speed/course with allowed offsets
-            desired_cog = (self.cog + random.uniform(-self.ais_max_cog_offset, self.ais_max_cog_offset)) % 360
-            # small smoothing
-            t["cog"] = (0.8 * t["cog"] + 0.2 * desired_cog) % 360
-            desired_sog = max(0.0, self.sog + random.uniform(-self.ais_max_sog_offset, self.ais_max_sog_offset))
-            t["sog"] = max(0.0, 0.8 * t["sog"] + 0.2 * desired_sog)
-            t["hdg"] = t["cog"]
+        if self._gpx_track:
+            # AIS follow the GPX track with slight lateral and time/index offsets
+            for t in self.ais_targets:
+                base_lat = self.lat
+                base_lon = self.lon
+                base_sog = self.sog
+                base_cog = self.cog
+                if self._gpx_start_time and self._gpx_end_time and all(p.get("time") is not None for p in self._gpx_track):
+                    # Time-based track
+                    now_dt = (self.sim_time or datetime.utcnow().replace(tzinfo=timezone.utc))
+                    off = int(t.get("gpx_time_offset_s", 0))
+                    lat, lon, sog, cog = self._gpx_position_at_time(now_dt + timedelta(seconds=off))
+                    base_lat, base_lon, base_sog, base_cog = lat, lon, sog, cog
+                else:
+                    # Index-based track (no timestamps)
+                    cur = getattr(self, "_gpx_cursor", 0)
+                    idx = cur + int(t.get("gpx_index_offset", 0))
+                    lat, lon, sog, cog = self._gpx_position_at_index(idx)
+                    base_lat, base_lon, base_sog, base_cog = lat, lon, sog, cog
+                # Apply small static nm offsets in local N/E directions
+                dy_nm = float(t.get("dy_nm", 0.0))
+                dx_nm = float(t.get("dx_nm", 0.0))
+                out_lat = base_lat + (dy_nm / 60.0)
+                cos_lat = math.cos(math.radians(max(-89.99, min(89.99, base_lat)))) or 1e-6
+                out_lon = base_lon + (dx_nm / (60.0 * cos_lat))
+                t["lat"], t["lon"] = out_lat, out_lon
+                # Slight variation around base sog/cog for realism
+                t["sog"] = max(0.0, base_sog + random.uniform(-self.ais_max_sog_offset, self.ais_max_sog_offset))
+                t["cog"] = (base_cog + random.uniform(-self.ais_max_cog_offset, self.ais_max_cog_offset)) % 360
+                t["hdg"] = t["cog"]
+        else:
+            for t in self.ais_targets:
+                # Nudge towards own ship speed/course with allowed offsets
+                desired_cog = (self.cog + random.uniform(-self.ais_max_cog_offset, self.ais_max_cog_offset)) % 360
+                # small smoothing
+                t["cog"] = (0.8 * t["cog"] + 0.2 * desired_cog) % 360
+                desired_sog = max(0.0, self.sog + random.uniform(-self.ais_max_sog_offset, self.ais_max_sog_offset))
+                t["sog"] = max(0.0, 0.8 * t["sog"] + 0.2 * desired_sog)
+                t["hdg"] = t["cog"]
 
-            dist_nm = t["sog"] * dt_hours
-            rad_cog = math.radians(t["cog"])
-            t["lat"] += (dist_nm / 60.0) * math.cos(rad_cog)
-            lat_for_lon = max(-89.99, min(89.99, t["lat"]))
-            t["lon"] += (dist_nm / (60.0 * math.cos(math.radians(lat_for_lon)))) * math.sin(rad_cog)
-            if t["lon"] > 180:
-                t["lon"] -= 360
-            if t["lon"] < -180:
-                t["lon"] += 360
+                dist_nm = t["sog"] * dt_hours
+                rad_cog = math.radians(t["cog"])
+                t["lat"] += (dist_nm / 60.0) * math.cos(rad_cog)
+                lat_for_lon = max(-89.99, min(89.99, t["lat"]))
+                t["lon"] += (dist_nm / (60.0 * math.cos(math.radians(lat_for_lon)))) * math.sin(rad_cog)
+                if t["lon"] > 180:
+                    t["lon"] -= 360
+                if t["lon"] < -180:
+                    t["lon"] += 360
 
     def _build_ais_sentences(self, current_utc_time: datetime) -> str:
         if not self.ais_targets:
@@ -821,6 +866,50 @@ class NMEASimulator:
                 "connected_at": c.get("connected_at", "")
             })
         return out
+
+    # --- GPX position helpers for AIS ---
+    def _gpx_position_at_time(self, t: datetime):
+        # Returns (lat, lon, sog, cog) at time t, clamped to track
+        if not (self._gpx_track and self._gpx_start_time and self._gpx_end_time):
+            return (self.lat, self.lon, self.sog, self.cog)
+        if t <= self._gpx_start_time:
+            p0, p1 = self._gpx_track[0], self._gpx_track[1]
+        elif t >= self._gpx_end_time:
+            p0, p1 = self._gpx_track[-2], self._gpx_track[-1]
+        else:
+            p0, p1 = None, None
+            for i in range(1, len(self._gpx_track)):
+                if self._gpx_track[i]["time"] >= t:
+                    p0, p1 = self._gpx_track[i-1], self._gpx_track[i]
+                    break
+            if p0 is None or p1 is None:
+                p0, p1 = self._gpx_track[-2], self._gpx_track[-1]
+        t0, t1 = p0["time"], p1["time"]
+        span = max(1e-6, (t1 - t0).total_seconds()) if (t0 and t1) else 1.0
+        frac = min(1.0, max(0.0, (t - t0).total_seconds() / span)) if (t0 and t1) else 0.0
+        lat = p0["lat"] + (p1["lat"] - p0["lat"]) * frac
+        lon = p0["lon"] + (p1["lon"] - p0["lon"]) * frac
+        seg_nm = self._haversine_nm(p0["lat"], p0["lon"], p1["lat"], p1["lon"])  # nm
+        sog = max(0.0, (seg_nm / (span / 3600.0)))
+        cog = self._bearing_deg(p0["lat"], p0["lon"], p1["lat"], p1["lon"]) % 360
+        return (lat, lon, sog, cog)
+
+    def _gpx_position_at_index(self, idx: int):
+        # Returns (lat, lon, sog, cog) at index idx (clamped), using next point for cog/sog
+        if not self._gpx_track:
+            return (self.lat, self.lon, self.sog, self.cog)
+        n = len(self._gpx_track)
+        if n < 2:
+            return (self.lat, self.lon, self.sog, self.cog)
+        i0 = max(0, min(n - 2, int(idx)))
+        i1 = i0 + 1
+        p0, p1 = self._gpx_track[i0], self._gpx_track[i1]
+        lat, lon = p0["lat"], p0["lon"]
+        seg_nm = self._haversine_nm(p0["lat"], p0["lon"], p1["lat"], p1["lon"])  # nm
+        # Approximate speed by segment length over interval seconds
+        sog = max(0.0, seg_nm / max(1e-6, (self.interval / 3600.0)))
+        cog = self._bearing_deg(p0["lat"], p0["lon"], p1["lat"], p1["lon"]) % 360
+        return (lat, lon, sog, cog)
 
     # --- GPX helpers ---
     def _prepare_gpx(self, track):
