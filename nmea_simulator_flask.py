@@ -328,11 +328,55 @@ def api_upload_gpx():
     if start_time and end_time:
         duration_s = int((end_time - start_time).total_seconds())
 
-    # Downsample path for preview (max ~500 points)
+    # Downsample path for map preview (max ~500 points)
     step = max(1, len(pts) // 500)
     path = [[p["lat"], p["lon"]] for i, p in enumerate(pts) if i % step == 0]
     if path[-1] != [pts[-1]["lat"], pts[-1]["lon"]]:
         path.append([pts[-1]["lat"], pts[-1]["lon"]])
+
+    # Build a time-based preview timeline for accurate slider preview (max ~600 samples)
+    timeline = None
+    if has_time and start_time and end_time and isinstance(duration_s, int) and duration_s > 0:
+        try:
+            # Helper: interpolate at a given datetime
+            def interp_at(tdt):
+                prev = None
+                nxtp = None
+                for i in range(1, len(pts)):
+                    ti = pts[i].get("time")
+                    if ti and ti >= tdt:
+                        prev = pts[i-1]
+                        nxtp = pts[i]
+                        break
+                if prev is None or nxtp is None:
+                    prev = pts[-2]
+                    nxtp = pts[-1]
+                t0, t1 = prev.get("time"), nxtp.get("time")
+                if t0 and t1:
+                    span = max(1e-6, (t1 - t0).total_seconds())
+                    frac = min(1.0, max(0.0, (tdt - t0).total_seconds() / span))
+                    lat = float(prev["lat"]) + (float(nxtp["lat"]) - float(prev["lat"])) * frac
+                    lon = float(prev["lon"]) + (float(nxtp["lon"]) - float(prev["lon"])) * frac
+                else:
+                    lat, lon = float(prev["lat"]), float(prev["lon"])
+                return (lat, lon)
+
+            max_samples = 600
+            step_s = max(1, duration_s // max_samples)
+            timeline = []
+            tcur = start_time
+            rel = 0
+            while rel <= duration_s:
+                lat, lon = interp_at(tcur)
+                timeline.append([int(rel), lat, lon])
+                rel += step_s
+                tcur = tcur + timedelta(seconds=step_s)
+            # Ensure last point included exactly
+            if timeline and timeline[-1][0] < duration_s:
+                lat, lon = interp_at(end_time)
+                timeline.append([int(duration_s), lat, lon])
+        except Exception:
+            timeline = None
 
     gpx_id = str(uuid.uuid4())
     # Serialize times to ISO for storage meta; keep datetime objects in points for the simulator
@@ -346,6 +390,7 @@ def api_upload_gpx():
         "duration_s": duration_s,
         "bbox": {"minlat": minlat, "maxlat": maxlat, "minlon": minlon, "maxlon": maxlon},
         "path": path,
+        "timeline": timeline,
     }
     GPX_STORE[gpx_id] = {"points": pts, "meta": meta}
     return jsonify({"ok": True, "gpx": meta})

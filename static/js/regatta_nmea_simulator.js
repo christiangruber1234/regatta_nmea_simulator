@@ -179,15 +179,37 @@ function updateGpxSliderPreview(){
   if (currentGpxMeta.has_time && typeof currentGpxMeta.duration_s === 'number'){
     const t = parseInt(gpxSliderEl.value, 10) || 0;
     gpxSelectedOffsetS = t;
-    // Position preview: approximate by fraction of time over total
-    const frac = Math.max(0, Math.min(1, t / Math.max(1, currentGpxMeta.duration_s)));
-    const idxF = frac * Math.max(1, path.length - 1);
-    const i0 = Math.floor(idxF), i1 = Math.min(path.length - 1, i0 + 1);
-    const f = idxF - i0;
-    const [lat0, lon0] = path[i0];
-    const [lat1, lon1] = path[i1];
-    const lat = lerp(lat0, lat1, f);
-    const lon = lerp(lon0, lon1, f);
+    // Position preview: use precise time-based timeline if available
+    let lat, lon;
+    const timeline = Array.isArray(currentGpxMeta.timeline) ? currentGpxMeta.timeline : null;
+    if (timeline && timeline.length > 1){
+      // Binary search for bracket around t
+      let lo = 0, hi = timeline.length - 1;
+      if (t <= timeline[0][0]){
+        lat = timeline[0][1]; lon = timeline[0][2];
+      } else if (t >= timeline[hi][0]){
+        lat = timeline[hi][1]; lon = timeline[hi][2];
+      } else {
+        while (hi - lo > 1){
+          const mid = (lo + hi) >> 1;
+          if (timeline[mid][0] <= t) lo = mid; else hi = mid;
+        }
+        const t0 = timeline[lo][0], t1 = timeline[hi][0];
+        const f = (t - t0) / Math.max(1, (t1 - t0));
+        lat = lerp(timeline[lo][1], timeline[hi][1], f);
+        lon = lerp(timeline[lo][2], timeline[hi][2], f);
+      }
+    } else {
+      // Fallback: fraction of time over downsampled path
+      const frac = Math.max(0, Math.min(1, t / Math.max(1, currentGpxMeta.duration_s)));
+      const idxF = frac * Math.max(1, path.length - 1);
+      const i0 = Math.floor(idxF), i1 = Math.min(path.length - 1, i0 + 1);
+      const f = idxF - i0;
+      const [lat0, lon0] = path[i0];
+      const [lat1, lon1] = path[i1];
+      lat = lerp(lat0, lat1, f);
+      lon = lerp(lon0, lon1, f);
+    }
     marker.setLatLng([lat, lon]);
     syncInputsFromMarker();
     if (gpxCursorLabel){
