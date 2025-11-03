@@ -37,6 +37,24 @@ body { background: var(--bg); color: var(--fg); font-family: system-ui, -apple-s
 .grid { display:grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
 @media (min-width: 700px) { .grid { grid-template-columns: repeat(4, 1fr); } }
 
+/* Form layout improvements for CONTROL card */
+.controls .grid > div { display:flex; flex-direction: column; }
+.controls .grid > div label { 
+  /* Reserve consistent space for up to two-line labels for better row alignment */
+  min-height: 2.25em; 
+  display:flex; 
+  align-items: flex-end; 
+}
+.controls .grid .span-2 { grid-column: span 2; }
+.controls .grid .span-3 { grid-column: span 3; }
+.controls .grid .span-4 { grid-column: span 4; }
+
+/* Improve numeric alignment and readability */
+input[type="number"], input[type="datetime-local"] {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
 label { display:block; font-size: 0.85rem; color: var(--muted); margin-bottom: 0.25rem; }
 input, select { width: 100%; padding: 0.55rem 0.65rem; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--fg); }
 
