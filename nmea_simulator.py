@@ -534,7 +534,7 @@ class NMEASimulator:
                                     "sog": t["sog"],
                                     "cog": t["cog"],
                                     "name": t.get("name"),
-                                    "display_name": f"{t.get('name') or 'Vessel'} (SOG {t['sog']:.1f} kn, COG {t['cog']:.0f}°)",
+                                    "display_name": f"{t.get('name') or 'Vessel'} (SOG {t['sog']:.1f} kn, COG {int(round(t['cog'])) % 360:03d}°)",
                                 }
                                 for t in self.ais_targets
                             ],
@@ -638,14 +638,16 @@ class NMEASimulator:
             self._last_ais24_minute = minute_key
             for t in self.ais_targets:
                 base_name = t.get("name") or "Vessel"
-                sog_i = int(round(float(t.get("sog", 0.0))))
-                cog_i = int(round(float(t.get("cog", 0.0))) % 360)
+                sog_v = float(t.get("sog", 0.0))
+                cog_v = float(t.get("cog", 0.0))
+                sog_str = f"{sog_v:.1f}"  # one decimal place
+                cog_str = f"{int(round(cog_v)) % 360:03d}"  # 3 digits with leading zeros
                 # AIS 6-bit doesn't support '|', so use '/' as separator
-                suffix = f" {sog_i}/{cog_i}"
+                suffix = f" {sog_str}/{cog_str}"
                 maxlen = 20
                 allowed = maxlen - len(suffix)
                 if allowed < 1:
-                    name24 = (f"{sog_i}/{cog_i}")[:maxlen]
+                    name24 = (f"{sog_str}/{cog_str}")[:maxlen]
                 else:
                     name24 = base_name[:allowed] + suffix
                 msgs.append(create_aivdm_type24_part_a(t["mmsi"], name24))
