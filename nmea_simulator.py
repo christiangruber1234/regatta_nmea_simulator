@@ -356,6 +356,8 @@ class NMEASimulator:
         self.ais_max_sog_offset = float(max(0.0, ais_max_sog_offset))
         self.ais_targets: List[Dict] = []
         self.ais_distribution_radius_nm = float(max(0.0, ais_distribution_radius_nm))
+        # Load skipper names before creating AIS targets (used by name generator)
+        self._skipper_names = self._load_skippers()
         self._init_ais_targets()
 
         # Runtime control
@@ -368,8 +370,6 @@ class NMEASimulator:
         self._stream = deque(maxlen=200)
         # Last minute when Type 24 static messages were emitted
         self._last_ais24_minute = None
-        # Load skipper names from static file (optional)
-        self._skipper_names = self._load_skippers()
         # TCP server state
         self.tcp_port = int(tcp_port) if tcp_port else None
         self._tcp_server_sock = None

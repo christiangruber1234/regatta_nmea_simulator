@@ -72,7 +72,7 @@ def api_start():
                 start_dt = start_dt.astimezone(timezone.utc)
 
         params = dict(
-            host=data.get("host", "127.0.0.1"),
+            host=data.get("host", "0.0.0.0"),
             port=int(data.get("port", 10110)),
             tcp_port=int(data.get("tcp_port", 10110)),
             interval=float(data.get("interval", 1.0)),
