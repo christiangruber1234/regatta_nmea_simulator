@@ -24,6 +24,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Dict, Tuple, Deque
 from collections import deque
 import argparse
+import os
 
 # --- Configuration ---
 TARGET_HOST = '127.0.0.1'  # IP address to send NMEA data to (localhost)
@@ -367,6 +368,8 @@ class NMEASimulator:
         self._stream = deque(maxlen=200)
         # Last minute when Type 24 static messages were emitted
         self._last_ais24_minute = None
+        # Load skipper names from static file (optional)
+        self._skipper_names = self._load_skippers()
         # TCP server state
         self.tcp_port = int(tcp_port) if tcp_port else None
         self._tcp_server_sock = None
@@ -732,7 +735,31 @@ class NMEASimulator:
             ))
         return "".join(msgs)
 
+    def _load_skippers(self):
+        """Load skipper names from static/skippers.txt if available.
+        Returns a list of non-empty lines; falls back to built-in names on error.
+        """
+        try:
+            base = os.path.dirname(__file__)
+            path = os.path.join(base, 'static', 'skippers.txt')
+            names = []
+            with open(path, 'r', encoding='utf-8') as f:
+                for line in f:
+                    name = line.strip()
+                    if name:
+                        names.append(name)
+            return names
+        except Exception:
+            return []
+
     def _make_vessel_name(self, idx: int) -> str:
+        # Prefer names from skippers.txt if available
+        if isinstance(self._skipper_names, list) and self._skipper_names:
+            try:
+                return random.choice(self._skipper_names)
+            except Exception:
+                pass
+        # Fallback: built-in generator
         first_names = [
             "Alex", "Sam", "Jamie", "Chris", "Taylor", "Jordan", "Casey", "Riley",
             "Avery", "Morgan", "Charlie", "Rowan", "Quinn", "Dakota", "Skyler"
@@ -742,7 +769,6 @@ class NMEASimulator:
             "Garcia", "Rodriguez", "Martinez", "Hernandez", "Lopez", "Gonzalez",
             "Wilson", "Anderson"
         ]
-        # Make a pseudo-random but stable pick based on index
         fn = first_names[(idx * 7 + 3) % len(first_names)]
         ln = last_names[(idx * 11 + 5) % len(last_names)]
         return f"{fn} {ln}"
