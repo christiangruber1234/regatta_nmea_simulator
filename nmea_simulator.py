@@ -394,6 +394,7 @@ class NMEASimulator:
         self._lock = threading.Lock()
         self._sock: Optional[socket.socket] = None
         self._last_status = {}
+        self._started_at: Optional[datetime] = None
         # Stream buffer of recent lines
         self._stream = deque(maxlen=200)
         # Last minute when Type 24 static messages were emitted
@@ -411,6 +412,10 @@ class NMEASimulator:
         if self.is_running():
             return
         self._stop_event.clear()
+        try:
+            self._started_at = datetime.utcnow().replace(tzinfo=timezone.utc)
+        except Exception:
+            self._started_at = None
         self._thread = threading.Thread(target=self._run_loop, daemon=True)
         self._thread.start()
 
@@ -427,6 +432,7 @@ class NMEASimulator:
             except Exception:
                 pass
             self._sock = None
+        self._started_at = None
 
     def restart(self, **kwargs) -> None:
         self.stop()
@@ -483,6 +489,7 @@ class NMEASimulator:
                 "twd": self.twd,
                 "magvar": self.magvar,
                 "sim_time": self.sim_time.isoformat() if self.sim_time else None,
+                "started_at": self._started_at.isoformat() if self._started_at else None,
                 "gnss": self._last_status.get("gnss") if isinstance(self._last_status, dict) else None,
                 "ais": self._last_status.get("ais") if isinstance(self._last_status, dict) else None,
                 "stream_size": len(self._stream),

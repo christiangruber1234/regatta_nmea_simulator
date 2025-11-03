@@ -29,6 +29,22 @@ body { background: var(--bg); color: var(--fg); font-family: system-ui, -apple-s
 .app-header-center { position: absolute; left: 50%; transform: translateX(-50%); display:flex; gap: 8px; align-items:center; }
 .app-header .control-btn { padding: 0.4rem 0.7rem; border-radius: 8px; border: 1px solid var(--border); background: transparent; color: var(--fg); }
 .app-header .control-btn.primary { background: var(--primary); border-color: var(--primary); color: #fff; }
+/* State colors for Start/Stop */
+.app-header .control-btn.btn-green { background: #16a34a; border-color: #16a34a; color: #fff; }
+.app-header .control-btn.btn-red { background: #dc2626; border-color: #dc2626; color: #fff; }
+/* Animated running state for Start button */
+@keyframes pulse-outline {
+  0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.8); }
+  70% { box-shadow: 0 0 0 6px rgba(34, 197, 94, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+}
+.app-header .control-btn.btn-running {
+  border-color: #22c55e;
+  color: #22c55e;
+  background: transparent;
+  animation: pulse-outline 1.5s ease-out infinite;
+}
+.app-header .control-btn.btn-running:disabled { opacity: 1; }
 
 /* Make content scroll under header */
 body { padding-top: var(--header-h); }
@@ -40,7 +56,7 @@ body { padding-top: var(--header-h); }
 .app-nav button { padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; background: transparent; color: var(--fg); cursor: pointer; }
 .app-nav button:hover { background: var(--card); }
 
-.container { display:grid; grid-template-columns: 1fr; gap: 1rem; padding: 1rem; max-width: 1100px; margin: 0 auto; }
+.container { display:grid; grid-template-columns: 1fr; gap: 1rem; padding: 1rem; max-width: 1100px; margin: 20px auto; }
 @media (min-width: 900px) {
   .container { grid-template-columns: 1fr 1fr; }
 }

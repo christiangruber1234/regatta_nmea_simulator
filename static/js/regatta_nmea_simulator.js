@@ -51,6 +51,27 @@ let gpxSliderEl = document.getElementById('gpx_slider');
 let gpxCursorLabel = document.getElementById('gpxCursorLabel');
 let gpxSelectedOffsetS = 0; // seconds from GPX start when time data exists
 let gpxSelectedFraction = 0; // 0..1 when no time
+// Running timer
+let runningTicker = null;
+let simStartedAtMs = null;
+
+function zero2(n){ return String(n).padStart(2, '0'); }
+function formatHMS(ms){
+  const totalSec = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  return `${zero2(h)}:${zero2(m)}:${zero2(s)}`;
+}
+function updateStartButtonLabelTick(){
+  if (!startBtn) return;
+  if (simStartedAtMs && !isNaN(simStartedAtMs)){
+    const diff = Date.now() - simStartedAtMs;
+    startBtn.textContent = `RUNNING ${formatHMS(diff)}`;
+  } else {
+    startBtn.textContent = 'RUNNING';
+  }
+}
 
 // Theme toggle
 const savedTheme = localStorage.getItem('theme') || 'light';
@@ -348,7 +369,49 @@ async function refreshStatus(){
     const running = !!data.running;
     statusText.textContent = running ? `Status: Running (lat=${(data.lat||0).toFixed?.(4)}, lon=${(data.lon||0).toFixed?.(4)}, port=${data.port})` : 'Status: Stopped';
     startBtn.disabled = running;
+    // Update Start button label to show uptime as HH:MM:SS and animate border while running
+    try {
+      if (running) {
+        // Determine start time from backend or fallback to local storage
+        if (data.started_at) {
+          const st = new Date(data.started_at);
+          simStartedAtMs = st.getTime();
+        } else {
+          let startedAt = parseInt(localStorage.getItem('sim.startedAtEpoch') || '0', 10);
+          if (!startedAt || isNaN(startedAt)) {
+            startedAt = Date.now();
+            localStorage.setItem('sim.startedAtEpoch', String(startedAt));
+          }
+          simStartedAtMs = startedAt;
+        }
+        // Ensure per-second ticker is running
+        if (!runningTicker) {
+          runningTicker = setInterval(updateStartButtonLabelTick, 1000);
+        }
+        // Immediate label update
+        updateStartButtonLabelTick();
+        // Apply running style
+        startBtn.classList.add('btn-running');
+      } else {
+        // Clear ticker and reset label/styles
+        if (runningTicker) { clearInterval(runningTicker); runningTicker = null; }
+        simStartedAtMs = null;
+        startBtn.textContent = 'Start';
+        startBtn.classList.remove('btn-running');
+        try { localStorage.removeItem('sim.startedAtEpoch'); } catch(e){}
+      }
+    } catch(e){}
     stopBtn.disabled = !running;
+    // Visual state on header buttons
+    try {
+      if (running) {
+        startBtn.classList.remove('btn-green');
+        stopBtn.classList.add('btn-red');
+      } else {
+        stopBtn.classList.remove('btn-red');
+        startBtn.classList.add('btn-green');
+      }
+    } catch(e){}
     // Update current position marker on map when running
     if (running && typeof data.lat === 'number' && typeof data.lon === 'number') {
       const latLng = [data.lat, data.lon];
