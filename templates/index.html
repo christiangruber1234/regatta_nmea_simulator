@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>NMEA Simulator</title>
+    <link rel="stylesheet" href="https://unpkg.com/modern-css-reset/dist/reset.min.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="/static/css/styles.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <h1>NMEA 0183 Simulator</h1>
+      <div class="mode-toggle">
+        <label class="switch">
+          <input type="checkbox" id="themeToggle" />
+          <span class="slider"></span>
+        </label>
+        <span id="themeLabel">Day</span>
+      </div>
+    </header>
+
+    <main class="container">
+      <section class="controls card">
+        <div class="grid">
+          <div>
+            <label>Target Host</label>
+            <input id="host" type="text" value="127.0.0.1" />
+          </div>
+          <div>
+            <label>Target Port</label>
+            <input id="port" type="number" value="10110" min="1" max="65535" />
+          </div>
+          <div>
+            <label>Interval (s)</label>
+            <input id="interval" type="number" value="1.0" min="0.1" step="0.1" />
+          </div>
+          <div>
+            <label>Wind Enabled</label>
+            <select id="wind_enabled">
+              <option value="false" selected>No</option>
+              <option value="true">Yes</option>
+            </select>
+          </div>
+        </div>
+        <div class="grid">
+          <div>
+            <label>Start Latitude</label>
+            <input id="lat" type="number" value="47.0707" step="0.0001" />
+          </div>
+          <div>
+            <label>Start Longitude</label>
+            <input id="lon" type="number" value="15.4395" step="0.0001" />
+          </div>
+          <div>
+            <label>Start Date & Time (UTC)</label>
+            <input id="start_datetime" type="datetime-local" />
+          </div>
+        </div>
+        <div class="grid">
+          <div>
+            <label>Initial SOG (kn)</label>
+            <input id="sog" type="number" value="5" step="0.1" />
+          </div>
+          <div>
+            <label>Initial COG (°T)</label>
+            <input id="cog" type="number" value="45" step="1" />
+          </div>
+          <div>
+            <label>Initial TWS (kn)</label>
+            <input id="tws" type="number" value="10" step="0.1" />
+          </div>
+          <div>
+            <label>Initial TWD (°T)</label>
+            <input id="twd" type="number" value="270" step="1" />
+          </div>
+          <div>
+            <label>Mag Variation (°E:+ / W:-)</label>
+            <input id="magvar" type="number" value="-2.5" step="0.1" />
+          </div>
+        </div>
+        <div class="buttons">
+          <button id="startBtn" class="primary">Start</button>
+          <button id="stopBtn">Stop</button>
+          <button id="restartBtn">Restart</button>
+        </div>
+        <p class="status"><span id="statusText">Status: Unknown</span></p>
+      </section>
+
+      <section class="map card">
+        <div class="map-header">
+          <h2>Starting Position</h2>
+          <p class="muted">Click on the map to set the starting lat/lon.</p>
+        </div>
+        <div id="map" class="map-canvas"></div>
+      </section>
+    </main>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="/static/js/app.js"></script>
+  </body>
+</html>
