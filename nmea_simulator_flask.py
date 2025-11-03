@@ -44,6 +44,19 @@ def api_status():
     return jsonify(sim.status())
 
 
+@app.route("/api/stream", methods=["GET"]) 
+def api_stream():
+    sim = get_simulator()
+    if sim is None:
+        return jsonify({"lines": []})
+    try:
+        limit = int(request.args.get("limit", 100))
+    except Exception:
+        limit = 100
+    lines = sim.get_stream(limit=limit)
+    return jsonify({"lines": lines})
+
+
 @app.route("/api/start", methods=["POST"]) 
 def api_start():
     data = request.get_json(force=True) or {}

@@ -21,7 +21,8 @@ import math
 import random
 import threading
 from datetime import datetime, timedelta, timezone
-from typing import Optional, List, Dict, Tuple
+from typing import Optional, List, Dict, Tuple, Deque
+from collections import deque
 import argparse
 
 # --- Configuration ---
@@ -325,6 +326,8 @@ class NMEASimulator:
         self._lock = threading.Lock()
         self._sock: Optional[socket.socket] = None
         self._last_status = {}
+        # Stream buffer of recent lines
+        self._stream: Deque[str] = deque(maxlen=200)
 
     def is_running(self) -> bool:
         return self._thread is not None and self._thread.is_alive()
@@ -376,6 +379,7 @@ class NMEASimulator:
                 "sim_time": self.sim_time.isoformat() if self.sim_time else None,
                 "gnss": self._last_status.get("gnss") if isinstance(self._last_status, dict) else None,
                 "ais": self._last_status.get("ais") if isinstance(self._last_status, dict) else None,
+                "stream_size": len(self._stream),
             }
         return st
 
@@ -501,6 +505,12 @@ class NMEASimulator:
                 # Send outside the lock
                 self._sock.sendto(full_nmea_packet.encode('ascii'), (self.host, self.port))
 
+                # Append to stream buffer (split into lines and ignore empties)
+                for line in full_nmea_packet.splitlines():
+                    if line:
+                        with self._lock:
+                            self._stream.append(line)
+
                 wind_info = (
                     f"TWS={self.tws:.1f}kn, TWD={self.twd:.0f}°, TWA={twa:.0f}°"
                     if self.wind_enabled
@@ -522,6 +532,12 @@ class NMEASimulator:
             finally:
                 self._sock = None
                 print("Simulator socket closed.")
+
+    def get_stream(self, limit: int = 100) -> List[str]:
+        with self._lock:
+            if limit <= 0:
+                return []
+            return list(self._stream)[-limit:]
 
     # --- AIS internal methods ---
     def _init_ais_targets(self) -> None:

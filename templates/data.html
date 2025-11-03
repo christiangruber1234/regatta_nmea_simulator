@@ -44,7 +44,7 @@
         </table>
       </section>
 
-      <section class="card">
+      <section class="card" style="margin-bottom: 16px;">
         <h2>GNSS</h2>
         <table>
           <tbody>
@@ -68,6 +68,12 @@
           </thead>
           <tbody id="satRows"></tbody>
         </table>
+      </section>
+
+      <section class="card">
+        <h2>Data Stream</h2>
+        <p class="muted">Last 200 lines generated (NMEA and AIS).</p>
+        <pre id="streamBox" style="max-height: 320px; overflow: auto; white-space: pre-wrap;"></pre>
       </section>
     </main>
 
@@ -116,8 +122,21 @@
         }catch(e){ /* ignore */ }
       }
 
+      async function refreshStream(){
+        try{
+          const res = await fetch('/api/stream?limit=200');
+          const data = await res.json();
+          if(Array.isArray(data.lines)){
+            const box = document.getElementById('streamBox');
+            box.textContent = data.lines.join('\n');
+          }
+        }catch(e){ /* ignore */ }
+      }
+
       tick();
       setInterval(tick, 2000);
+      refreshStream();
+      setInterval(refreshStream, 2000);
     </script>
   </body>
 </html>
