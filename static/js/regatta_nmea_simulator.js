@@ -77,20 +77,28 @@ setDefaultStartUTC();
 // Leaflet map
 const map = L.map('map').setView([parseFloat(latEl.value), parseFloat(lonEl.value)], 10);
 
-// Define light and dark tile layers
+// Define base layers and OpenSeaMap seamark overlay
 const lightTiles = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   maxZoom: 19,
-  attribution: '&copy; OpenStreetMap contributors'
+  attribution: 'Map data: &copy; OpenStreetMap contributors | Nautical data: &copy; OpenSeaMap'
 });
 
 // CARTO Dark Matter (note: third-party terms may apply)
 const darkTiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
   maxZoom: 19,
-  attribution: '&copy; OpenStreetMap contributors, &copy; CARTO'
+  attribution: 'Map data: &copy; OpenStreetMap contributors, &copy; CARTO | Nautical data: &copy; OpenSeaMap'
+});
+
+// OpenSeaMap seamarks overlay
+const seamarkTiles = L.tileLayer('https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png', {
+  maxZoom: 19,
+  opacity: 0.9,
+  zIndex: 10,
 });
 
 let currentTiles = (savedTheme === 'dark') ? darkTiles : lightTiles;
 currentTiles.addTo(map);
+seamarkTiles.addTo(map);
 
 let marker = L.marker([parseFloat(latEl.value), parseFloat(lonEl.value)], {draggable: true}).addTo(map);
 let currentMarker = null; // simulator current position when running
