@@ -97,9 +97,19 @@ def api_start():
         sim = get_simulator()
         if sim and sim.is_running():
             return jsonify({"ok": False, "error": "Simulator already running"}), 409
-        sim = NMEASimulator(**params)
-        sim.start()
-        set_simulator(sim)
+        try:
+            sim = NMEASimulator(**params)
+            sim.start()
+            set_simulator(sim)
+        except Exception as e:
+            # Ensure any partially created simulator is stopped/cleared
+            try:
+                if sim:
+                    sim.stop()
+            except Exception:
+                pass
+            set_simulator(None)
+            return jsonify({"ok": False, "error": f"Failed to start simulator: {e}"}), 500
     return jsonify({"ok": True, "status": sim.status()})
 
 
