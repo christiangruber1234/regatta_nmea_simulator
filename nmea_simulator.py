@@ -438,6 +438,35 @@ class NMEASimulator:
 
     def status(self) -> dict:
         with self._lock:
+            # Build GPX info/progress if applicable
+            gpx_info = None
+            if self._gpx_track:
+                has_time = bool(self._gpx_start_time and self._gpx_end_time and all(p.get("time") is not None for p in self._gpx_track))
+                gpx_info = {
+                    "points": len(self._gpx_track),
+                    "start_time": self._gpx_start_time.isoformat() if self._gpx_start_time else None,
+                    "end_time": self._gpx_end_time.isoformat() if self._gpx_end_time else None,
+                    "duration_s": self._gpx_duration_s,
+                    "has_time": has_time,
+                }
+                # Progress
+                prog = {"mode": "none"}
+                if has_time and self.sim_time is not None and self._gpx_start_time is not None and self._gpx_duration_s is not None:
+                    try:
+                        off = int((self.sim_time - self._gpx_start_time).total_seconds())
+                    except Exception:
+                        off = 0
+                    if off < 0:
+                        off = 0
+                    if self._gpx_duration_s is not None:
+                        off = min(off, int(self._gpx_duration_s))
+                    prog = {"mode": "time", "offset_s": off, "sim_time": self.sim_time.isoformat()}
+                elif not has_time:
+                    idx = int(getattr(self, "_gpx_cursor", 0))
+                    total_pts = max(1, len(self._gpx_track) - 1)
+                    frac = max(0.0, min(1.0, idx / float(total_pts)))
+                    prog = {"mode": "index", "index": idx, "fraction": frac}
+                gpx_info["progress"] = prog
             st = {
                 "running": self.is_running(),
                 "host": self.host,
@@ -458,12 +487,7 @@ class NMEASimulator:
                 "ais": self._last_status.get("ais") if isinstance(self._last_status, dict) else None,
                 "stream_size": len(self._stream),
                 "tcp_clients": self._tcp_clients_summary() if self.tcp_port else [],
-                "gpx_track_info": {
-                    "points": len(self._gpx_track) if self._gpx_track else 0,
-                    "start_time": self._gpx_start_time.isoformat() if self._gpx_start_time else None,
-                    "end_time": self._gpx_end_time.isoformat() if self._gpx_end_time else None,
-                    "duration_s": self._gpx_duration_s,
-                } if self._gpx_track else None,
+                "gpx_track_info": gpx_info,
             }
         return st
 

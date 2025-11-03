@@ -128,6 +128,9 @@ async function uploadGpx(file){
   const g = data.gpx;
   currentGpxId = g.id;
   currentGpxMeta = g;
+  // Persist GPX selection and meta for page reloads
+  try { localStorage.setItem('gpx.currentId', currentGpxId); } catch(e){}
+  try { localStorage.setItem('gpx.currentMeta', JSON.stringify(currentGpxMeta)); } catch(e){}
   if (gpxMetaEl){
     const dur = (g.duration_s != null) ? `${Math.floor(g.duration_s/3600)}h ${Math.floor((g.duration_s%3600)/60)}m ${g.duration_s%60}s` : 'n/a';
     gpxMetaEl.innerHTML = `
@@ -230,6 +233,65 @@ function updateGpxSliderPreview(){
 
 if (gpxSliderEl){ gpxSliderEl.addEventListener('input', updateGpxSliderPreview); }
 
+// Persist UI mode and slider changes
+function persistUiState(){
+  try { localStorage.setItem('ui.initMode', initModeEl ? initModeEl.value : 'manual'); } catch(e){}
+  try { localStorage.setItem('gpx.selectedOffsetS', String(gpxSelectedOffsetS || 0)); } catch(e){}
+  try { localStorage.setItem('gpx.selectedFraction', String(gpxSelectedFraction || 0)); } catch(e){}
+}
+if (initModeEl){ initModeEl.addEventListener('change', persistUiState); }
+if (gpxSliderEl){ gpxSliderEl.addEventListener('change', persistUiState); }
+
+// Rehydrate from persisted state on load
+function restorePersisted(){
+  try {
+    const savedMode = localStorage.getItem('ui.initMode');
+    if (savedMode && initModeEl){ initModeEl.value = savedMode; updateInitModeUI(); }
+    const savedMeta = localStorage.getItem('gpx.currentMeta');
+    const savedId = localStorage.getItem('gpx.currentId');
+    if (savedMeta){
+      const g = JSON.parse(savedMeta);
+      currentGpxMeta = g; currentGpxId = savedId || g.id;
+      // Render meta block
+      if (gpxMetaEl){
+        const dur = (g.duration_s != null) ? `${Math.floor(g.duration_s/3600)}h ${Math.floor((g.duration_s%3600)/60)}m ${g.duration_s%60}s` : 'n/a';
+        gpxMetaEl.innerHTML = `
+          <ul>
+            <li>Points: <b>${g.points_count}</b></li>
+            <li>Length: <b>${g.length_nm} nm</b></li>
+            <li>Has time: <b>${g.has_time ? 'Yes' : 'No'}</b></li>
+            <li>Start: <b>${g.start_time || 'n/a'}</b></li>
+            <li>End: <b>${g.end_time || 'n/a'}</b></li>
+            <li>Duration: <b>${dur}</b></li>
+          </ul>`;
+      }
+      // Recreate polyline and slider
+      if (gpxPolyline){ map.removeLayer(gpxPolyline); gpxPolyline = null; }
+      if (Array.isArray(g.path) && g.path.length > 1){
+        gpxPolyline = L.polyline(g.path.map(p => [p[0], p[1]]), { color: '#22d3ee', weight: 3, opacity: 0.8 }).addTo(map);
+        const b = L.latLngBounds(g.path.map(p => [p[0], p[1]]));
+        map.fitBounds(b, { padding: [20,20] });
+      }
+      if (gpxSliderEl){
+        if (g.has_time && typeof g.duration_s === 'number'){
+          gpxSliderEl.min = 0; gpxSliderEl.max = g.duration_s; gpxSliderEl.step = 1;
+          const so = parseInt(localStorage.getItem('gpx.selectedOffsetS') || '0', 10);
+          gpxSliderEl.value = isNaN(so) ? 0 : so; gpxSelectedOffsetS = parseInt(gpxSliderEl.value, 10) || 0;
+        } else {
+          const maxIdx = Math.max(0, (g.path || []).length - 1);
+          gpxSliderEl.min = 0; gpxSliderEl.max = maxIdx; gpxSliderEl.step = 1;
+          const sf = parseFloat(localStorage.getItem('gpx.selectedFraction') || '0');
+          const i0 = Math.max(0, Math.min(maxIdx, Math.round(sf * (maxIdx || 1))));
+          gpxSliderEl.value = String(i0);
+          gpxSelectedFraction = maxIdx ? (i0 / maxIdx) : 0;
+        }
+        updateGpxSliderPreview();
+      }
+    }
+  } catch(e){}
+}
+restorePersisted();
+
 // API helpers
 async function api(method, path, body){
   const res = await fetch(path, { method, headers: {'Content-Type': 'application/json'}, body: body ? JSON.stringify(body) : undefined });
@@ -257,6 +319,24 @@ async function refreshStatus(){
       if (currentMarker) {
         map.removeLayer(currentMarker);
         currentMarker = null;
+      }
+    }
+
+    // Sync GPX slider to simulation progress when running
+    if (running && currentGpxMeta && gpxSliderEl && data.gpx_track_info){
+      const gi = data.gpx_track_info;
+      const prog = gi.progress || {};
+      if (gi.has_time && typeof currentGpxMeta.duration_s === 'number' && prog.mode === 'time' && typeof prog.offset_s === 'number'){
+        const off = Math.max(0, Math.min(currentGpxMeta.duration_s, prog.offset_s));
+        if (String(gpxSliderEl.value) !== String(off)){
+          gpxSliderEl.value = String(off); gpxSelectedOffsetS = off; updateGpxSliderPreview(); persistUiState();
+        }
+      } else if (!gi.has_time && Array.isArray(currentGpxMeta.path) && currentGpxMeta.path.length > 1 && prog.mode === 'index'){
+        const maxIdx = currentGpxMeta.path.length - 1;
+        const idx = Math.max(0, Math.min(maxIdx, Math.round((prog.fraction || 0) * maxIdx)));
+        if (String(gpxSliderEl.value) !== String(idx)){
+          gpxSliderEl.value = String(idx); gpxSelectedFraction = maxIdx ? (idx / maxIdx) : 0; updateGpxSliderPreview(); persistUiState();
+        }
       }
     }
   } catch (e) {
