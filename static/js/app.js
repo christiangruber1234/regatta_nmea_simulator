@@ -1,8 +1,7 @@
 /* Frontend logic for NMEA Simulator UI */
 
 const html = document.documentElement;
-const themeToggle = document.getElementById('themeToggle');
-const themeLabel = document.getElementById('themeLabel');
+const themeBtn = document.getElementById('themeBtn');
 const hostEl = document.getElementById('host');
 const portEl = document.getElementById('port');
 const intervalEl = document.getElementById('interval');
@@ -24,22 +23,23 @@ const restartBtn = document.getElementById('restartBtn');
 // Theme toggle
 const savedTheme = localStorage.getItem('theme') || 'light';
 html.setAttribute('data-theme', savedTheme);
-themeToggle.checked = savedTheme === 'dark';
-updateThemeLabel();
-
-themeToggle.addEventListener('change', () => {
-  const t = themeToggle.checked ? 'dark' : 'light';
-  html.setAttribute('data-theme', t);
-  localStorage.setItem('theme', t);
-  updateThemeLabel();
-  // Switch map tiles to match theme
-  map.removeLayer(currentTiles);
-  currentTiles = (t === 'dark') ? darkTiles : lightTiles;
-  currentTiles.addTo(map);
-});
-
-function updateThemeLabel(){
-  themeLabel.textContent = themeToggle.checked ? 'Night' : 'Day';
+function updateThemeIcon(){
+  const isDark = html.getAttribute('data-theme') === 'dark';
+  if (themeBtn) themeBtn.textContent = isDark ? '🌙' : '☀️';
+}
+updateThemeIcon();
+if (themeBtn) {
+  themeBtn.addEventListener('click', () => {
+    const isDark = html.getAttribute('data-theme') === 'dark';
+    const t = isDark ? 'light' : 'dark';
+    html.setAttribute('data-theme', t);
+    localStorage.setItem('theme', t);
+    updateThemeIcon();
+    // Switch map tiles to match theme
+    map.removeLayer(currentTiles);
+    currentTiles = (t === 'dark') ? darkTiles : lightTiles;
+    currentTiles.addTo(map);
+  });
 }
 
 // Set default Start Date & Time (UTC) on load if empty

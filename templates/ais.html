@@ -17,18 +17,13 @@
   </head>
   <body>
     <header class="app-header">
-      <h1>AIS Simulation</h1>
-      <nav class="header-links">
-        <a href="/">Controls</a>
+      <h1>Regatta NMEA 0183 Simulator</h1>
+      <nav class="app-nav">
+        <a href="/">CONTROL</a>
+        <a href="/ais">AIS</a>
         <a href="/data">DATA</a>
+        <button id="themeBtn" title="Toggle Day/Night">☀️</button>
       </nav>
-      <div class="mode-toggle">
-        <label class="switch">
-          <input type="checkbox" id="themeToggle" />
-          <span class="slider"></span>
-        </label>
-        <span id="themeLabel">Day</span>
-      </div>
     </header>
 
     <main class="container">
@@ -65,23 +60,23 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
       const html = document.documentElement;
-      const themeToggle = document.getElementById('themeToggle');
-      const themeLabel = document.getElementById('themeLabel');
+      const themeBtn = document.getElementById('themeBtn');
       const savedTheme = localStorage.getItem('theme') || 'light';
       html.setAttribute('data-theme', savedTheme);
-      themeToggle.checked = savedTheme === 'dark';
-      function updateThemeLabel(){ themeLabel.textContent = themeToggle.checked ? 'Night' : 'Day'; }
-      updateThemeLabel();
-
-      themeToggle.addEventListener('change', () => {
-        const t = themeToggle.checked ? 'dark' : 'light';
-        html.setAttribute('data-theme', t);
-        localStorage.setItem('theme', t);
-        updateThemeLabel();
-        map.removeLayer(currentTiles);
-        currentTiles = (t === 'dark') ? darkTiles : lightTiles;
-        currentTiles.addTo(map);
-      });
+      function updateThemeIcon(){ const isDark = html.getAttribute('data-theme') === 'dark'; if(themeBtn) themeBtn.textContent = isDark ? '🌙' : '☀️'; }
+      updateThemeIcon();
+      if (themeBtn) {
+        themeBtn.addEventListener('click', () => {
+          const isDark = html.getAttribute('data-theme') === 'dark';
+          const t = isDark ? 'light' : 'dark';
+          html.setAttribute('data-theme', t);
+          localStorage.setItem('theme', t);
+          updateThemeIcon();
+          map.removeLayer(currentTiles);
+          currentTiles = (t === 'dark') ? darkTiles : lightTiles;
+          currentTiles.addTo(map);
+        });
+      }
 
       // API helper
       async function api(method, path, body){
