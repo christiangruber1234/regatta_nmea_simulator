@@ -29,7 +29,7 @@ import argparse
 TARGET_HOST = '127.0.0.1'  # IP address to send NMEA data to (localhost)
 TARGET_PORT = 10110        # Port to send NMEA data to (must match listener)
 SEND_INTERVAL = 1.0        # Seconds between sending NMEA sentences
-WIND_INSTRUMENTS_ENABLED = False # Set to False to simulate wind instruments being disconnected
+WIND_INSTRUMENTS_ENABLED = True # Default to True; set to False to simulate wind instruments being disconnected
 
 # --- Simulation Parameters ---
 # Initial values
@@ -297,6 +297,7 @@ class NMEASimulator:
         ais_num_targets: int = 0,
         ais_max_cog_offset: float = 20.0,
         ais_max_sog_offset: float = 2.0,
+        ais_distribution_radius_nm: float = 1.0,
     ) -> None:
         self.host = host
         self.port = int(port)
@@ -318,6 +319,7 @@ class NMEASimulator:
         self.ais_max_cog_offset = float(max(0.0, ais_max_cog_offset))
         self.ais_max_sog_offset = float(max(0.0, ais_max_sog_offset))
         self.ais_targets: List[Dict] = []
+        self.ais_distribution_radius_nm = float(max(0.0, ais_distribution_radius_nm))
         self._init_ais_targets()
 
         # Runtime control
@@ -496,6 +498,7 @@ class NMEASimulator:
                                     "lon": t["lon"],
                                     "sog": t["sog"],
                                     "cog": t["cog"],
+                                    "name": t.get("name"),
                                 }
                                 for t in self.ais_targets
                             ],
@@ -543,9 +546,15 @@ class NMEASimulator:
     def _init_ais_targets(self) -> None:
         self.ais_targets = []
         for i in range(self.ais_num_targets):
-            # Random small offset around own ship (~0.2 nm)
-            dlat = random.uniform(-0.003, 0.003)
-            dlon = random.uniform(-0.003, 0.003)
+            # Random point within a circle of radius ais_distribution_radius_nm (uniform area)
+            r = math.sqrt(random.random()) * self.ais_distribution_radius_nm
+            theta = random.uniform(0, 2 * math.pi)
+            dx_nm = r * math.cos(theta)
+            dy_nm = r * math.sin(theta)
+            dlat = dy_nm / 60.0
+            lat_for_lon = max(-89.99, min(89.99, self.lat))
+            cos_lat = math.cos(math.radians(lat_for_lon)) or 1e-6
+            dlon = dx_nm / (60.0 * cos_lat)
             mmsi = 999000001 + i
             sog = max(0.0, self.sog + random.uniform(-self.ais_max_sog_offset, self.ais_max_sog_offset))
             cog = (self.cog + random.uniform(-self.ais_max_cog_offset, self.ais_max_cog_offset)) % 360
@@ -556,6 +565,7 @@ class NMEASimulator:
                 "sog": sog,
                 "cog": cog,
                 "hdg": cog,
+                "name": self._make_vessel_name(i),
             })
 
     def _update_ais_targets(self, dt_hours: float) -> None:
@@ -588,6 +598,21 @@ class NMEASimulator:
                 t["mmsi"], t["lat"], t["lon"], t["sog"], t["cog"], t["hdg"], ts
             ))
         return "".join(msgs)
+
+    def _make_vessel_name(self, idx: int) -> str:
+        first_names = [
+            "Alex", "Sam", "Jamie", "Chris", "Taylor", "Jordan", "Casey", "Riley",
+            "Avery", "Morgan", "Charlie", "Rowan", "Quinn", "Dakota", "Skyler"
+        ]
+        last_names = [
+            "Smith", "Johnson", "Williams", "Brown", "Jones", "Miller", "Davis",
+            "Garcia", "Rodriguez", "Martinez", "Hernandez", "Lopez", "Gonzalez",
+            "Wilson", "Anderson"
+        ]
+        # Make a pseudo-random but stable pick based on index
+        fn = first_names[(idx * 7 + 3) % len(first_names)]
+        ln = last_names[(idx * 11 + 5) % len(last_names)]
+        return f"{fn} {ln}"
 
 
 def run_simulator(host, port, interval, **kwargs):

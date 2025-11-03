@@ -75,7 +75,7 @@ def api_start():
             host=data.get("host", "127.0.0.1"),
             port=int(data.get("port", 10110)),
             interval=float(data.get("interval", 1.0)),
-            wind_enabled=bool(data.get("wind_enabled", False)),
+            wind_enabled=bool(data.get("wind_enabled", True)),
             start_lat=float(data.get("lat", 47.0707)),
             start_lon=float(data.get("lon", 15.4395)),
             sog_knots=float(data.get("sog", 5.0)),
@@ -84,9 +84,10 @@ def api_start():
             twd_degrees=float(data.get("twd", 270.0)),
             mag_variation=float(data.get("magvar", -2.5)),
             start_datetime=start_dt,
-            ais_num_targets=int(data.get("ais_num_targets", 0)),
+            ais_num_targets=int(data.get("ais_num_targets", 20)),
             ais_max_cog_offset=float(data.get("ais_max_cog_offset", 20.0)),
             ais_max_sog_offset=float(data.get("ais_max_sog_offset", 2.0)),
+            ais_distribution_radius_nm=float(data.get("ais_distribution_radius_nm", 10.0)),
         )
     except Exception as e:
         return jsonify({"ok": False, "error": f"Invalid parameter: {e}"}), 400

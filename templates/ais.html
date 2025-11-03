@@ -31,7 +31,7 @@
         <div class="grid">
           <div>
             <label>Number of AIS targets</label>
-            <input id="ais_num_targets" type="number" min="0" value="5" />
+            <input id="ais_num_targets" type="number" min="0" value="20" />
           </div>
           <div>
             <label>Max offset AIS COG (°)</label>
@@ -40,6 +40,10 @@
           <div>
             <label>Max offset AIS SOG (kn)</label>
             <input id="ais_max_sog_offset" type="number" min="0" step="0.1" value="2.0" />
+          </div>
+          <div>
+            <label>Random distribution radius (nm)</label>
+            <input id="ais_distribution_radius_nm" type="number" min="0" step="0.1" value="10.0" />
           </div>
         </div>
         <div class="buttons" style="margin-top:12px;">
@@ -116,11 +120,11 @@
           let m = aisMarkers.get(String(t.mmsi));
           if(!m){
             m = L.circleMarker(latLng, { radius: 5, color: '#1e90ff', fillColor:'#1e90ff', fillOpacity: 0.9 }).addTo(map);
-            m.bindTooltip(`MMSI ${t.mmsi}\nSOG ${t.sog?.toFixed?.(1)} kn\nCOG ${t.cog?.toFixed?.(0)}°`);
+            m.bindTooltip(`${t.name || 'Vessel'}\nMMSI ${t.mmsi}\nSOG ${t.sog?.toFixed?.(1)} kn\nCOG ${t.cog?.toFixed?.(0)}°`);
             aisMarkers.set(String(t.mmsi), m);
           } else {
             m.setLatLng(latLng);
-            m.setTooltipContent(`MMSI ${t.mmsi}\nSOG ${t.sog?.toFixed?.(1)} kn\nCOG ${t.cog?.toFixed?.(0)}°`);
+            m.setTooltipContent(`${t.name || 'Vessel'}\nMMSI ${t.mmsi}\nSOG ${t.sog?.toFixed?.(1)} kn\nCOG ${t.cog?.toFixed?.(0)}°`);
           }
         }
         // Remove stale
@@ -140,6 +144,7 @@
           ais_num_targets: parseInt(document.getElementById('ais_num_targets').value, 10),
           ais_max_cog_offset: parseFloat(document.getElementById('ais_max_cog_offset').value),
           ais_max_sog_offset: parseFloat(document.getElementById('ais_max_sog_offset').value),
+          ais_distribution_radius_nm: parseFloat(document.getElementById('ais_distribution_radius_nm').value),
         };
         await api('POST', '/api/restart', body);
         await refresh();
