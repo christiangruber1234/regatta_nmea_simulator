@@ -41,7 +41,7 @@ DEFAULT_COG = 185.0     # Course Over Ground in degrees True
 DEFAULT_TWS = 10.0      # True Wind Speed in knots
 DEFAULT_TWD = 270.0     # True Wind Direction in degrees True (from North)
 DEFAULT_MAGVAR = -2.5   # Magnetic variation, degrees West (-) or East (+)
-DEFAULT_TCP_PORT = 10110 # Default TCP server port for NMEA stream
+DEFAULT_TCP_PORT = 10111 # Default TCP server port for NMEA stream
 
 # --- Helper Functions ---
 

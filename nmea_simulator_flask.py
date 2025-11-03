@@ -71,10 +71,15 @@ def api_start():
             else:
                 start_dt = start_dt.astimezone(timezone.utc)
 
+        # Validate/normalize UDP destination host: 0.0.0.0 is not a valid destination
+        raw_host = str(data.get("host", "127.0.0.1")).strip()
+        if raw_host in ("0.0.0.0", "", "any", "all"):
+            raw_host = "127.0.0.1"
+
         params = dict(
-            host=data.get("host", "0.0.0.0"),
+            host=raw_host,
             port=int(data.get("port", 10110)),
-            tcp_port=int(data.get("tcp_port", 10110)),
+            tcp_port=int(data.get("tcp_port", 10111)),
             interval=float(data.get("interval", 1.0)),
             wind_enabled=bool(data.get("wind_enabled", True)),
             start_lat=float(data.get("lat", 47.0707)),
