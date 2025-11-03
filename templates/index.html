@@ -24,7 +24,7 @@
         <h2 style="margin: 0 0 8px 0;">Network</h2>
         <div class="grid">
           <div>
-            <label>UDP target adress</label>
+            <label>UDP adress</label>
             <input id="host" type="text" value="127.0.0.1" />
           </div>
           <div>
@@ -32,12 +32,12 @@
             <input id="port" type="number" value="10110" min="1" max="65535" />
           </div>
           <div>
-            <label>TCP Port</label>
-            <input id="tcp_port" type="number" value="10111" min="1" max="65535" />
+            <label>TCP interface</label>
+            <input id="tcp_host" type="text" value="0.0.0.0" />
           </div>
           <div>
-            <label>TCP listen interface</label>
-            <input id="tcp_host" type="text" value="0.0.0.0" />
+            <label>TCP Port</label>
+            <input id="tcp_port" type="number" value="10111" min="1" max="65535" />
           </div>
         </div>
 
@@ -113,6 +113,6 @@
     </main>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="/static/js/app.js"></script>
+    <script src="/static/js/regatta_nmea_simulator.js"></script>
   </body>
 </html>
