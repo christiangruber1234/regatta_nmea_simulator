@@ -52,6 +52,23 @@
         <p class="status"><span id="statusText">Status: Unknown</span></p>
       </section>
 
+      <section class="card" style="overflow:auto;">
+        <h2>Simulated AIS Targets</h2>
+        <table style="width:100%; border-collapse:collapse;">
+          <thead>
+            <tr>
+              <th style="text-align:left; padding:6px; border-bottom:1px solid var(--border);">Name</th>
+              <th style="text-align:left; padding:6px; border-bottom:1px solid var(--border);">MMSI</th>
+              <th style="text-align:left; padding:6px; border-bottom:1px solid var(--border);">SOG (kn)</th>
+              <th style="text-align:left; padding:6px; border-bottom:1px solid var(--border);">COG (°)</th>
+              <th style="text-align:left; padding:6px; border-bottom:1px solid var(--border);">Lat</th>
+              <th style="text-align:left; padding:6px; border-bottom:1px solid var(--border);">Lon</th>
+            </tr>
+          </thead>
+          <tbody id="aisRows"></tbody>
+        </table>
+      </section>
+
       <section class="map card">
         <div class="map-header">
           <h2>AIS Targets</h2>
@@ -120,15 +137,38 @@
           let m = aisMarkers.get(String(t.mmsi));
           if(!m){
             m = L.circleMarker(latLng, { radius: 5, color: '#1e90ff', fillColor:'#1e90ff', fillOpacity: 0.9 }).addTo(map);
-            m.bindTooltip(`${t.name || 'Vessel'}\nMMSI ${t.mmsi}\nSOG ${t.sog?.toFixed?.(1)} kn\nCOG ${t.cog?.toFixed?.(0)}°`);
+            m.bindTooltip(`${t.display_name || (t.name || 'Vessel')}\nMMSI ${t.mmsi}`);
             aisMarkers.set(String(t.mmsi), m);
           } else {
             m.setLatLng(latLng);
-            m.setTooltipContent(`${t.name || 'Vessel'}\nMMSI ${t.mmsi}\nSOG ${t.sog?.toFixed?.(1)} kn\nCOG ${t.cog?.toFixed?.(0)}°`);
+            m.setTooltipContent(`${t.display_name || (t.name || 'Vessel')}\nMMSI ${t.mmsi}`);
           }
         }
         // Remove stale
         for(const [k, m] of aisMarkers){ if(!seen.has(k)){ map.removeLayer(m); aisMarkers.delete(k); } }
+
+        renderAisTable(ais);
+      }
+
+      function renderAisTable(list){
+        const tbody = document.getElementById('aisRows');
+        if(!tbody) return;
+        tbody.innerHTML = '';
+        // Simple sort by MMSI
+        const rows = [...list].sort((a,b) => (a.mmsi||0) - (b.mmsi||0));
+        for(const t of rows){
+          const tr = document.createElement('tr');
+          const name = t.display_name || t.name || 'Vessel';
+          tr.innerHTML = `
+            <td style="padding:6px; border-bottom:1px solid var(--border);">${name}</td>
+            <td style="padding:6px; border-bottom:1px solid var(--border);">${t.mmsi}</td>
+            <td style="padding:6px; border-bottom:1px solid var(--border);">${(t.sog??0).toFixed(1)}</td>
+            <td style="padding:6px; border-bottom:1px solid var(--border);">${(t.cog??0).toFixed(0)}</td>
+            <td style="padding:6px; border-bottom:1px solid var(--border);">${(t.lat??0).toFixed(5)}</td>
+            <td style="padding:6px; border-bottom:1px solid var(--border);">${(t.lon??0).toFixed(5)}</td>
+          `;
+          tbody.appendChild(tr);
+        }
       }
 
       async function refresh(){

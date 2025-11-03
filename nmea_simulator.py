@@ -499,6 +499,7 @@ class NMEASimulator:
                                     "sog": t["sog"],
                                     "cog": t["cog"],
                                     "name": t.get("name"),
+                                    "display_name": f"{t.get('name') or 'Vessel'} (SOG {t['sog']:.1f} kn, COG {t['cog']:.0f}°)",
                                 }
                                 for t in self.ais_targets
                             ],
