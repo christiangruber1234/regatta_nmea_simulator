@@ -7,7 +7,9 @@ const portEl = document.getElementById('port');
 const tcpPortEl = document.getElementById('tcp_port');
 const tcpHostEl = document.getElementById('tcp_host');
 const intervalEl = document.getElementById('interval');
-const windEl = document.getElementById('wind_enabled');
+const windSelectEl = document.getElementById('wind_enabled'); // legacy
+const windToggleEl = document.getElementById('wind_enabled_toggle');
+const windFieldsEl = document.getElementById('wind_fields');
 const latEl = document.getElementById('lat');
 const lonEl = document.getElementById('lon');
 const startDtEl = document.getElementById('start_datetime');
@@ -88,8 +90,8 @@ function setDefaultStartUTC(){
 }
 setDefaultStartUTC();
 
-// Leaflet map
-const map = L.map('map').setView([parseFloat(latEl.value), parseFloat(lonEl.value)], 10);
+// Leaflet map (hide attribution footer)
+const map = L.map('map', { attributionControl: false }).setView([parseFloat(latEl.value), parseFloat(lonEl.value)], 10);
 
 // Define base layers and OpenSeaMap seamark overlay
 const lightTiles = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -391,7 +393,7 @@ async function start(){
     tcp_port: parseInt(tcpPortEl.value, 10),
     tcp_host: tcpHostEl ? tcpHostEl.value : '0.0.0.0',
   interval: parseFloat((getInitMode()==='gpx' ? intervalGpxEl.value : intervalEl.value)),
-    wind_enabled: windEl.value === 'true',
+  wind_enabled: getWindEnabled(),
     lat: parseFloat(latEl.value),
     lon: parseFloat(lonEl.value),
     start_datetime: startDtEl.value ? new Date(startDtEl.value).toISOString() : null,
@@ -422,7 +424,7 @@ async function restart(){
     tcp_port: parseInt(tcpPortEl.value, 10),
     tcp_host: tcpHostEl ? tcpHostEl.value : '0.0.0.0',
   interval: parseFloat((getInitMode()==='gpx' ? intervalGpxEl.value : intervalEl.value)),
-    wind_enabled: windEl.value === 'true',
+  wind_enabled: getWindEnabled(),
     lat: parseFloat(latEl.value),
     lon: parseFloat(lonEl.value),
     start_datetime: startDtEl.value ? new Date(startDtEl.value).toISOString() : null,
@@ -447,3 +449,17 @@ restartBtn.addEventListener('click', () => restart().catch(err => alert(err.mess
 
 refreshStatus();
 setInterval(refreshStatus, 2000);
+
+function getWindEnabled(){
+  if (windToggleEl) return !!windToggleEl.checked;
+  if (windSelectEl) return windSelectEl.value === 'true';
+  return true;
+}
+
+function updateWindUI(){
+  const on = getWindEnabled();
+  if (windFieldsEl){ windFieldsEl.style.display = on ? '' : 'none'; }
+}
+if (windToggleEl){ windToggleEl.addEventListener('change', updateWindUI); }
+if (windSelectEl){ windSelectEl.addEventListener('change', updateWindUI); }
+updateWindUI();

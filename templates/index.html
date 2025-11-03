@@ -11,6 +11,11 @@
   <body>
     <header class="app-header">
       <h1>Regatta NMEA 0183 Simulator</h1>
+      <div class="app-header-center">
+        <button id="startBtn" class="primary control-btn">Start</button>
+        <button id="stopBtn" class="control-btn">Stop</button>
+        <button id="restartBtn" class="control-btn">Restart</button>
+      </div>
       <nav class="app-nav">
         <a href="/">CONTROL</a>
         <a href="/ais">AIS</a>
@@ -120,15 +125,18 @@
           </div>
         </div>
 
-        <h2 style="margin: 16px 0 8px 0;">Wind</h2>
-        <div class="grid">
-          <div>
-            <label>Wind Enabled</label>
-            <select id="wind_enabled">
-              <option value="false">No</option>
-              <option value="true" selected>Yes</option>
-            </select>
+        <div class="section-header" style="margin: 16px 0 8px 0;">
+          <h2 style="margin:0;">Wind</h2>
+          <div class="switch-row" style="justify-content:flex-end;">
+            <span class="muted">Off</span>
+            <label class="switch">
+              <input id="wind_enabled_toggle" type="checkbox" checked />
+              <span class="slider"></span>
+            </label>
+            <span class="muted">On</span>
           </div>
+        </div>
+        <div id="wind_fields" class="grid">
           <div>
             <label>Initial TWS (kn)</label>
             <input id="tws" type="number" value="10" step="0.1" />
@@ -139,11 +147,7 @@
           </div>
         </div>
 
-        <div class="buttons">
-          <button id="startBtn" class="primary">Start</button>
-          <button id="stopBtn">Stop</button>
-          <button id="restartBtn">Restart</button>
-        </div>
+        
         <p class="status"><span id="statusText">Status: Unknown</span></p>
       </section>
 

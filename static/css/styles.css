@@ -25,6 +25,11 @@ body { background: var(--bg); color: var(--fg); font-family: system-ui, -apple-s
 .app-header::after { content:""; position:absolute; left:0; right:0; bottom:-1px; height:1px; background: var(--border); opacity: 0.9; }
 .app-header h1 { line-height: 1; }
 
+/* Centered control buttons in header */
+.app-header-center { position: absolute; left: 50%; transform: translateX(-50%); display:flex; gap: 8px; align-items:center; }
+.app-header .control-btn { padding: 0.4rem 0.7rem; border-radius: 8px; border: 1px solid var(--border); background: transparent; color: var(--fg); }
+.app-header .control-btn.primary { background: var(--primary); border-color: var(--primary); color: #fff; }
+
 /* Make content scroll under header */
 body { padding-top: var(--header-h); }
 .app-header h1 { font-size: 1.25rem; margin:0; }
@@ -81,6 +86,8 @@ button:disabled { opacity: 0.6; cursor:not-allowed; }
 html[data-theme="dark"] .leaflet-container { background: #0b1220; }
 /* Ensure maps stay below the fixed header visually */
 .leaflet-container { position: relative; z-index: 0; }
+/* Hide Leaflet attribution/footer */
+.leaflet-control-attribution { display: none !important; }
 
 /* (old switch styles removed in favor of icon button) */
 

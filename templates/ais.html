@@ -107,8 +107,8 @@
         return data;
       }
 
-      // Leaflet map
-  const map = L.map('map').setView([42.715769349296004, 16.23217374761267], 10);
+    // Leaflet map (hide attribution footer)
+    const map = L.map('map', { attributionControl: false }).setView([42.715769349296004, 16.23217374761267], 10);
       const lightTiles = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 19,
         attribution: 'Map data: &copy; OpenStreetMap contributors | Nautical data: &copy; OpenSeaMap'
