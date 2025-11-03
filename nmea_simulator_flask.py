@@ -145,11 +145,77 @@ def api_start():
                         pass
                 elif start_dt is None:
                     params["start_datetime"] = gpx_start_dt
-        # If GPX provided, override initial lat/lon to the first track point
+        # If GPX provided, set initial lat/lon (and sog/cog when possible) to the selected slider position
         if gpx_points:
             try:
-                params["start_lat"] = float(gpx_points[0]["lat"])  # type: ignore
-                params["start_lon"] = float(gpx_points[0]["lon"])  # type: ignore
+                if gpx_meta and gpx_meta.get("has_time"):
+                    # Determine target time: explicit start_datetime beats offset; else offset from GPX start
+                    target_dt = params.get("start_datetime") or (gpx_start_dt if 'gpx_start_dt' in locals() else None)
+                    # Fallback: GPX start
+                    if target_dt is None:
+                        target_dt = datetime.fromisoformat(gpx_meta["start_time"]).astimezone(timezone.utc) if gpx_meta.get("start_time") else None
+                    # Find surrounding points and interpolate
+                    prev = None
+                    nxt = None
+                    if target_dt is not None:
+                        for i in range(1, len(gpx_points)):
+                            t1 = gpx_points[i].get("time")
+                            if t1 and t1 >= target_dt:
+                                prev = gpx_points[i-1]
+                                nxt = gpx_points[i]
+                                break
+                    if not prev or not nxt:
+                        prev = gpx_points[0]
+                        nxt = gpx_points[1]
+                    t0 = prev.get("time")
+                    t1 = nxt.get("time")
+                    if t0 and t1 and target_dt:
+                        span = max(1e-6, (t1 - t0).total_seconds())
+                        frac = min(1.0, max(0.0, (target_dt - t0).total_seconds() / span))
+                        lat = float(prev["lat"]) + (float(nxt["lat"]) - float(prev["lat"])) * frac
+                        lon = float(prev["lon"]) + (float(nxt["lon"]) - float(prev["lon"])) * frac
+                        params["start_lat"], params["start_lon"] = lat, lon
+                        # Set initial sog/cog to segment values for consistent AIS init
+                        try:
+                            # Distance in nm and duration to hours
+                            from math import atan2, degrees, radians, sin, cos, asin, sqrt
+                            # Haversine
+                            R_km = 6371.0
+                            dlat = radians(nxt["lat"] - prev["lat"])  # type: ignore
+                            dlon = radians(nxt["lon"] - prev["lon"])  # type: ignore
+                            a = sin(dlat/2)**2 + cos(radians(prev["lat"])) * cos(radians(nxt["lat"])) * sin(dlon/2)**2  # type: ignore
+                            c = 2 * asin(sqrt(a))
+                            km = R_km * c
+                            nm = km * 0.539957
+                            hours = span / 3600.0
+                            sog0 = nm / hours if hours > 0 else 0.0
+                            # Bearing
+                            y = sin(radians(nxt["lon"] - prev["lon"])) * cos(radians(nxt["lat"]))  # type: ignore
+                            x = cos(radians(prev["lat"])) * sin(radians(nxt["lat"])) - sin(radians(prev["lat"])) * cos(radians(nxt["lat"])) * cos(radians(nxt["lon"] - prev["lon"]))  # type: ignore
+                            brg = (degrees(atan2(y, x)) + 360.0) % 360.0
+                            params["sog_knots"] = float(sog0)
+                            params["cog_degrees"] = float(brg)
+                        except Exception:
+                            pass
+                    else:
+                        # Fallback to first point
+                        params["start_lat"] = float(gpx_points[0]["lat"])  # type: ignore
+                        params["start_lon"] = float(gpx_points[0]["lon"])  # type: ignore
+                else:
+                    # No times: use fraction if provided, else first point
+                    if gpx_start_fraction is not None:
+                        try:
+                            f = max(0.0, min(1.0, float(gpx_start_fraction)))
+                            idx = int(round(f * (len(gpx_points) - 1)))
+                            idx = max(0, min(idx, len(gpx_points) - 1))
+                            params["start_lat"] = float(gpx_points[idx]["lat"])  # type: ignore
+                            params["start_lon"] = float(gpx_points[idx]["lon"])  # type: ignore
+                        except Exception:
+                            params["start_lat"] = float(gpx_points[0]["lat"])  # type: ignore
+                            params["start_lon"] = float(gpx_points[0]["lon"])  # type: ignore
+                    else:
+                        params["start_lat"] = float(gpx_points[0]["lat"])  # type: ignore
+                        params["start_lon"] = float(gpx_points[0]["lon"])  # type: ignore
             except Exception:
                 pass
         # If GPX has no timestamps and a start fraction is provided, forward to simulator
