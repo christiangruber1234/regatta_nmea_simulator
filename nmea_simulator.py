@@ -33,8 +33,8 @@ WIND_INSTRUMENTS_ENABLED = True # Default to True; set to False to simulate wind
 
 # --- Simulation Parameters ---
 # Initial values
-DEFAULT_LAT = 47.0707   # Decimal degrees (e.g., Graz, Austria)
-DEFAULT_LON = 15.4395   # Decimal degrees
+DEFAULT_LAT = 42.715769349296004   # Default starting latitude
+DEFAULT_LON = 16.23217374761267    # Default starting longitude
 DEFAULT_SOG = 5.0       # Speed Over Ground in knots
 DEFAULT_COG = 45.0      # Course Over Ground in degrees True
 DEFAULT_TWS = 10.0      # True Wind Speed in knots
