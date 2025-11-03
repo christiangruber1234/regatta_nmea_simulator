@@ -80,6 +80,7 @@ def api_start():
             host=raw_host,
             port=int(data.get("port", 10110)),
             tcp_port=int(data.get("tcp_port", 10111)),
+            tcp_host=str(data.get("tcp_host", "0.0.0.0")).strip() or "0.0.0.0",
             interval=float(data.get("interval", 1.0)),
             wind_enabled=bool(data.get("wind_enabled", True)),
             start_lat=float(data.get("lat", 47.0707)),

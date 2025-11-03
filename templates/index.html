@@ -24,8 +24,8 @@
         <h2 style="margin: 0 0 8px 0;">Network</h2>
         <div class="grid">
           <div>
-            <label>Interface</label>
-            <input id="host" type="text" value="0.0.0.0" />
+            <label>UDP target adress</label>
+            <input id="host" type="text" value="127.0.0.1" />
           </div>
           <div>
             <label>UDP Port</label>
@@ -36,8 +36,8 @@
             <input id="tcp_port" type="number" value="10111" min="1" max="65535" />
           </div>
           <div>
-            <label>Interval (s)</label>
-            <input id="interval" type="number" value="1.0" min="0.1" step="0.1" />
+            <label>TCP listen interface</label>
+            <input id="tcp_host" type="text" value="0.0.0.0" />
           </div>
         </div>
 
@@ -58,6 +58,10 @@
         </div>
 
         <div class="grid">
+          <div>
+            <label>Interval (s)</label>
+            <input id="interval" type="number" value="1.0" min="0.1" step="0.1" />
+          </div>
           <div>
             <label>Initial SOG (kn)</label>
             <input id="sog" type="number" value="5" step="0.1" />

@@ -65,7 +65,9 @@ button:disabled { opacity: 0.6; cursor:not-allowed; }
 .status { margin-top: 0.5rem; color: var(--muted); }
 
 .map-header { display:flex; align-items: baseline; justify-content: space-between; }
-.map-canvas { height: 420px; border-radius: 8px; border: 1px solid var(--border); }
+/* Make the OpenStreetMap canvas use max available height in the panel */
+.map.card { display:flex; flex-direction: column; }
+.map-canvas { flex: 1 1 auto; height: 70vh; min-height: 360px; border-radius: 8px; border: 1px solid var(--border); }
 
 /* (old switch styles removed in favor of icon button) */
 

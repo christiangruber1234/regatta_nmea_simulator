@@ -5,6 +5,7 @@ const themeBtn = document.getElementById('themeBtn');
 const hostEl = document.getElementById('host');
 const portEl = document.getElementById('port');
 const tcpPortEl = document.getElementById('tcp_port');
+const tcpHostEl = document.getElementById('tcp_host');
 const intervalEl = document.getElementById('interval');
 const windEl = document.getElementById('wind_enabled');
 const latEl = document.getElementById('lat');
@@ -130,6 +131,7 @@ async function start(){
     host: hostEl.value,
     port: parseInt(portEl.value, 10),
     tcp_port: parseInt(tcpPortEl.value, 10),
+    tcp_host: tcpHostEl ? tcpHostEl.value : '0.0.0.0',
     interval: parseFloat(intervalEl.value),
     wind_enabled: windEl.value === 'true',
     lat: parseFloat(latEl.value),
@@ -155,6 +157,7 @@ async function restart(){
     host: hostEl.value,
     port: parseInt(portEl.value, 10),
     tcp_port: parseInt(tcpPortEl.value, 10),
+    tcp_host: tcpHostEl ? tcpHostEl.value : '0.0.0.0',
     interval: parseFloat(intervalEl.value),
     wind_enabled: windEl.value === 'true',
     lat: parseFloat(latEl.value),

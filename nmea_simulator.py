@@ -334,6 +334,7 @@ class NMEASimulator:
         ais_max_sog_offset: float = 2.0,
         ais_distribution_radius_nm: float = 1.0,
         tcp_port: Optional[int] = DEFAULT_TCP_PORT,
+        tcp_host: str = "0.0.0.0",
     ) -> None:
         self.host = host
         self.port = int(port)
@@ -372,6 +373,7 @@ class NMEASimulator:
         self._last_ais24_minute = None
         # TCP server state
         self.tcp_port = int(tcp_port) if tcp_port else None
+        self.tcp_host = str(tcp_host or "0.0.0.0")
         self._tcp_server_sock = None
         self._tcp_clients = []  # each: {sock, addr, port, connected_at}
 
@@ -414,6 +416,7 @@ class NMEASimulator:
                 "host": self.host,
                 "port": self.port,
                 "tcp_port": self.tcp_port,
+                "tcp_host": getattr(self, "tcp_host", "0.0.0.0"),
                 "interval": self.interval,
                 "wind_enabled": self.wind_enabled,
                 "lat": self.lat,
@@ -439,11 +442,12 @@ class NMEASimulator:
             try:
                 srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-                srv.bind(("0.0.0.0", int(self.tcp_port)))
+                bind_host = getattr(self, "tcp_host", "0.0.0.0") or "0.0.0.0"
+                srv.bind((bind_host, int(self.tcp_port)))
                 srv.listen(8)
                 srv.setblocking(False)
                 self._tcp_server_sock = srv
-                print(f"TCP server listening on 0.0.0.0:{self.tcp_port}")
+                print(f"TCP server listening on {bind_host}:{self.tcp_port}")
             except Exception as e:
                 print(f"**ERR: Failed to start TCP server on {self.tcp_port}: {e}")
                 self._tcp_server_sock = None
