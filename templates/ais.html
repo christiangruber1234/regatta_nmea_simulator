@@ -52,7 +52,15 @@
         <p class="status"><span id="statusText">Status: Unknown</span></p>
       </section>
 
-      <section class="card" style="overflow:auto;">
+      <section class="map card">
+        <div class="map-header">
+          <h2>AIS Targets</h2>
+          <p class="muted">Shows simulated AIS targets moving with deviations from own ship.</p>
+        </div>
+        <div id="map" class="map-canvas"></div>
+      </section>
+
+      <section class="card" style="overflow:auto; grid-column: 1 / -1;">
         <h2>Simulated AIS Targets</h2>
         <table style="width:100%; border-collapse:collapse;">
           <thead>
@@ -67,14 +75,6 @@
           </thead>
           <tbody id="aisRows"></tbody>
         </table>
-      </section>
-
-      <section class="map card">
-        <div class="map-header">
-          <h2>AIS Targets</h2>
-          <p class="muted">Shows simulated AIS targets moving with deviations from own ship.</p>
-        </div>
-        <div id="map" class="map-canvas"></div>
       </section>
     </main>
 

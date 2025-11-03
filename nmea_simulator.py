@@ -196,6 +196,26 @@ def _sixbit_to_payload(bits: str) -> Tuple[str, int]:
         out_chars.append(chr(val))
     return ("".join(out_chars), fill)
 
+# AIS 6-bit text character set per ITU-R M.1371
+_AIS_CHARSET = "@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_ !\"#$%&'()*+,-./0123456789:;<=>?"
+
+def _ais_text_to_sixbit(text: str, width: int) -> str:
+    """Encode ASCII text to AIS 6-bit field of fixed width (chars). Pads with '@'."""
+    if text is None:
+        text = ""
+    s = str(text).upper()
+    chars = []
+    for ch in s:
+        if ch in _AIS_CHARSET:
+            chars.append(ch)
+        else:
+            chars.append(' ')
+    chars = chars[:width]
+    while len(chars) < width:
+        chars.append('@')
+    bits = ''.join(format(_AIS_CHARSET.index(c), '06b') for c in chars)
+    return bits
+
 def create_aivdm_type18(mmsi: int, lat: float, lon: float, sog_knots: float, cog_deg: float, heading_deg: float, ts_sec: int) -> str:
     # Build AIS message type 18 per ITU-R M.1371 with many fields defaulted
     # Scale values
@@ -233,6 +253,19 @@ def create_aivdm_type18(mmsi: int, lat: float, lon: float, sog_knots: float, cog
     bits += _pack_unsigned(0, 1)      # Comm state selector (SOTDMA=0)
     bits += _pack_unsigned(0, 19)     # Comm state (dummy)
 
+    payload, fill = _sixbit_to_payload(bits)
+    body = f"AIVDM,1,1,,A,{payload},{fill}"
+    cs = calculate_nmea_checksum(body)
+    return f"!{body}*{cs}\r\n"
+
+def create_aivdm_type24_part_a(mmsi: int, name: str) -> str:
+    """AIS Class B static data report, Part A (vessel name)."""
+    bits = ""
+    bits += _pack_unsigned(24, 6)   # Message ID
+    bits += _pack_unsigned(0, 2)    # Repeat
+    bits += _pack_unsigned(int(mmsi), 30)  # MMSI
+    bits += _pack_unsigned(0, 2)    # Part number = 0 (Part A)
+    bits += _ais_text_to_sixbit(name or "Vessel", 20)  # Name (20 chars)
     payload, fill = _sixbit_to_payload(bits)
     body = f"AIVDM,1,1,,A,{payload},{fill}"
     cs = calculate_nmea_checksum(body)
@@ -330,6 +363,8 @@ class NMEASimulator:
         self._last_status = {}
         # Stream buffer of recent lines
         self._stream: Deque[str] = deque(maxlen=200)
+        # Last minute when Type 24 static messages were emitted
+        self._last_ais24_minute = None
 
     def is_running(self) -> bool:
         return self._thread is not None and self._thread.is_alive()
@@ -594,6 +629,26 @@ class NMEASimulator:
             return ""
         ts = current_utc_time.second
         msgs = []
+        # Periodically send static data (Type 24 Part A) once per minute
+        try:
+            minute_key = int(current_utc_time.timestamp() // 60)
+        except Exception:
+            minute_key = None
+        if minute_key is not None and minute_key != self._last_ais24_minute:
+            self._last_ais24_minute = minute_key
+            for t in self.ais_targets:
+                base_name = t.get("name") or "Vessel"
+                sog_i = int(round(float(t.get("sog", 0.0))))
+                cog_i = int(round(float(t.get("cog", 0.0))) % 360)
+                # AIS 6-bit doesn't support '|', so use '/' as separator
+                suffix = f" {sog_i}/{cog_i}"
+                maxlen = 20
+                allowed = maxlen - len(suffix)
+                if allowed < 1:
+                    name24 = (f"{sog_i}/{cog_i}")[:maxlen]
+                else:
+                    name24 = base_name[:allowed] + suffix
+                msgs.append(create_aivdm_type24_part_a(t["mmsi"], name24))
         for t in self.ais_targets:
             msgs.append(create_aivdm_type18(
                 t["mmsi"], t["lat"], t["lon"], t["sog"], t["cog"], t["hdg"], ts
