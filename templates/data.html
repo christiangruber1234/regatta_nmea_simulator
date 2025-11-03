@@ -128,7 +128,9 @@
           const data = await res.json();
           if(Array.isArray(data.lines)){
             const box = document.getElementById('streamBox');
+            // Update content and auto-scroll to bottom
             box.textContent = data.lines.join('\n');
+            box.scrollTop = box.scrollHeight;
           }
         }catch(e){ /* ignore */ }
       }
