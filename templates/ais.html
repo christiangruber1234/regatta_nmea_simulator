@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AIS Simulator</title>
+    <link rel="stylesheet" href="https://unpkg.com/modern-css-reset/dist/reset.min.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="/static/css/styles.css" />
+    <style>
+      .controls .grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .map-canvas { height: 480px; }
+      .header-links { display:flex; gap:12px; align-items:center; margin-left:auto; }
+      .header-links a { color: var(--text-color); text-decoration: none; border: 1px solid var(--border-color); padding: 6px 10px; border-radius: 6px; }
+      .header-links a:hover { background: var(--hover-bg); }
+    </style>
+  </head>
+  <body>
+    <header class="app-header">
+      <h1>AIS Simulation</h1>
+      <nav class="header-links">
+        <a href="/">Controls</a>
+        <a href="/data">DATA</a>
+      </nav>
+      <div class="mode-toggle">
+        <label class="switch">
+          <input type="checkbox" id="themeToggle" />
+          <span class="slider"></span>
+        </label>
+        <span id="themeLabel">Day</span>
+      </div>
+    </header>
+
+    <main class="container">
+      <section class="controls card">
+        <div class="grid">
+          <div>
+            <label>Number of AIS targets</label>
+            <input id="ais_num_targets" type="number" min="0" value="5" />
+          </div>
+          <div>
+            <label>Max offset AIS COG (°)</label>
+            <input id="ais_max_cog_offset" type="number" min="0" step="1" value="20" />
+          </div>
+          <div>
+            <label>Max offset AIS SOG (kn)</label>
+            <input id="ais_max_sog_offset" type="number" min="0" step="0.1" value="2.0" />
+          </div>
+        </div>
+        <div class="buttons" style="margin-top:12px;">
+          <button id="applyBtn" class="primary">Apply & Restart</button>
+        </div>
+        <p class="status"><span id="statusText">Status: Unknown</span></p>
+      </section>
+
+      <section class="map card">
+        <div class="map-header">
+          <h2>AIS Targets</h2>
+          <p class="muted">Shows simulated AIS targets moving with deviations from own ship.</p>
+        </div>
+        <div id="map" class="map-canvas"></div>
+      </section>
+    </main>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+      const html = document.documentElement;
+      const themeToggle = document.getElementById('themeToggle');
+      const themeLabel = document.getElementById('themeLabel');
+      const savedTheme = localStorage.getItem('theme') || 'light';
+      html.setAttribute('data-theme', savedTheme);
+      themeToggle.checked = savedTheme === 'dark';
+      function updateThemeLabel(){ themeLabel.textContent = themeToggle.checked ? 'Night' : 'Day'; }
+      updateThemeLabel();
+
+      themeToggle.addEventListener('change', () => {
+        const t = themeToggle.checked ? 'dark' : 'light';
+        html.setAttribute('data-theme', t);
+        localStorage.setItem('theme', t);
+        updateThemeLabel();
+        map.removeLayer(currentTiles);
+        currentTiles = (t === 'dark') ? darkTiles : lightTiles;
+        currentTiles.addTo(map);
+      });
+
+      // API helper
+      async function api(method, path, body){
+        const res = await fetch(path, { method, headers: {'Content-Type': 'application/json'}, body: body ? JSON.stringify(body) : undefined });
+        const data = await res.json();
+        if(!res.ok){ throw new Error(data.error || 'Request failed'); }
+        return data;
+      }
+
+      // Leaflet map
+      const map = L.map('map').setView([47.0707, 15.4395], 10);
+      const lightTiles = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; OpenStreetMap contributors'
+      });
+      const darkTiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        maxZoom: 19,
+        attribution: '&copy; OpenStreetMap contributors, &copy; CARTO'
+      });
+      let currentTiles = (savedTheme === 'dark') ? darkTiles : lightTiles;
+      currentTiles.addTo(map);
+
+      let ownMarker = null;
+      let aisMarkers = new Map(); // mmsi -> marker
+
+      function updateMarkers(status){
+        if (typeof status.lat === 'number' && typeof status.lon === 'number'){
+          const latLng = [status.lat, status.lon];
+          if(!ownMarker){ ownMarker = L.marker(latLng, {title:'Own Ship'}).addTo(map); }
+          else { ownMarker.setLatLng(latLng); }
+        }
+        const ais = (status.ais || {}).targets || [];
+        const seen = new Set();
+        for(const t of ais){
+          seen.add(String(t.mmsi));
+          const latLng = [t.lat, t.lon];
+          let m = aisMarkers.get(String(t.mmsi));
+          if(!m){
+            m = L.circleMarker(latLng, { radius: 5, color: '#1e90ff', fillColor:'#1e90ff', fillOpacity: 0.9 }).addTo(map);
+            m.bindTooltip(`MMSI ${t.mmsi}\nSOG ${t.sog?.toFixed?.(1)} kn\nCOG ${t.cog?.toFixed?.(0)}°`);
+            aisMarkers.set(String(t.mmsi), m);
+          } else {
+            m.setLatLng(latLng);
+            m.setTooltipContent(`MMSI ${t.mmsi}\nSOG ${t.sog?.toFixed?.(1)} kn\nCOG ${t.cog?.toFixed?.(0)}°`);
+          }
+        }
+        // Remove stale
+        for(const [k, m] of aisMarkers){ if(!seen.has(k)){ map.removeLayer(m); aisMarkers.delete(k); } }
+      }
+
+      async function refresh(){
+        try{
+          const { running, ...rest } = await api('GET', '/api/status');
+          document.getElementById('statusText').textContent = running ? 'Status: Running' : 'Status: Stopped';
+          updateMarkers({ running, ...rest });
+        }catch(e){ document.getElementById('statusText').textContent = 'Status: Unknown'; }
+      }
+
+      async function apply(){
+        const body = {
+          ais_num_targets: parseInt(document.getElementById('ais_num_targets').value, 10),
+          ais_max_cog_offset: parseFloat(document.getElementById('ais_max_cog_offset').value),
+          ais_max_sog_offset: parseFloat(document.getElementById('ais_max_sog_offset').value),
+        };
+        await api('POST', '/api/restart', body);
+        await refresh();
+      }
+
+      document.getElementById('applyBtn').addEventListener('click', () => apply().catch(err => alert(err.message)));
+
+      refresh();
+      setInterval(refresh, 2000);
+    </script>
+  </body>
+</html>

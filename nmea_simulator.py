@@ -21,7 +21,7 @@ import math
 import random
 import threading
 from datetime import datetime, timedelta, timezone
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Tuple
 import argparse
 
 # --- Configuration ---
@@ -171,6 +171,72 @@ def create_wimwv_apparent(awa_deg, aws_knots) -> str:
     checksum = calculate_nmea_checksum(body)
     return f"${body}*{checksum}\r\n"
 
+# --- AIS Helpers (AIVDM Type 18 - Class B position) ---
+
+def _pack_signed(value: int, bits: int) -> str:
+    if value < 0:
+        value = (1 << bits) + value
+    return format(value, f"0{bits}b")[-bits:]
+
+def _pack_unsigned(value: int, bits: int) -> str:
+    return format(max(0, min(value, (1 << bits) - 1)), f"0{bits}b")
+
+def _sixbit_to_payload(bits: str) -> Tuple[str, int]:
+    # Pad to 6-bit boundary
+    fill = (6 - (len(bits) % 6)) % 6
+    if fill:
+        bits += "0" * fill
+    out_chars = []
+    for i in range(0, len(bits), 6):
+        val = int(bits[i:i+6], 2)
+        val += 48
+        if val > 87:
+            val += 8
+        out_chars.append(chr(val))
+    return ("".join(out_chars), fill)
+
+def create_aivdm_type18(mmsi: int, lat: float, lon: float, sog_knots: float, cog_deg: float, heading_deg: float, ts_sec: int) -> str:
+    # Build AIS message type 18 per ITU-R M.1371 with many fields defaulted
+    # Scale values
+    sog = int(round(max(0.0, min(sog_knots, 102.2)) * 10))  # 0.1 knot
+    if sog > 1022:
+        sog = 1022
+    lon_i = int(round(lon * 600000))
+    lat_i = int(round(lat * 600000))
+    cog = int(round((cog_deg % 360.0) * 10))
+    if cog == 3600:
+        cog = 0
+    hdg = int(round(heading_deg % 360.0))
+    ts = max(0, min(int(ts_sec % 60), 59))
+
+    bits = ""
+    bits += _pack_unsigned(18, 6)     # Message ID
+    bits += _pack_unsigned(0, 2)      # Repeat
+    bits += _pack_unsigned(int(mmsi), 30)  # MMSI
+    bits += _pack_unsigned(0, 8)      # reserved
+    bits += _pack_unsigned(sog, 10)   # SOG 0.1 kn
+    bits += _pack_unsigned(0, 1)      # Position accuracy
+    bits += _pack_signed(lon_i, 28)   # Longitude
+    bits += _pack_signed(lat_i, 27)   # Latitude
+    bits += _pack_unsigned(cog, 12)   # COG 0.1 deg
+    bits += _pack_unsigned(hdg if hdg <= 359 else 511, 9)  # True heading
+    bits += _pack_unsigned(ts, 6)     # Timestamp seconds
+    bits += _pack_unsigned(0, 2)      # reserved
+    bits += _pack_unsigned(0, 1)      # CS unit flag / unit flag
+    bits += _pack_unsigned(0, 1)      # display flag
+    bits += _pack_unsigned(0, 1)      # DSC flag
+    bits += _pack_unsigned(0, 1)      # band flag
+    bits += _pack_unsigned(0, 1)      # msg 22 flag
+    bits += _pack_unsigned(0, 1)      # mode flag
+    bits += _pack_unsigned(0, 1)      # RAIM flag
+    bits += _pack_unsigned(0, 1)      # Comm state selector (SOTDMA=0)
+    bits += _pack_unsigned(0, 19)     # Comm state (dummy)
+
+    payload, fill = _sixbit_to_payload(bits)
+    body = f"AIVDM,1,1,,A,{payload},{fill}"
+    cs = calculate_nmea_checksum(body)
+    return f"!{body}*{cs}\r\n"
+
 def create_gpgsa(mode: str, fix_type: int, sv_ids: List[int], pdop: float, hdop: float, vdop: float) -> str:
     """Creates a GPGSA sentence (DOP and active satellites).
     mode: 'M' manual, 'A' automatic
@@ -227,6 +293,9 @@ class NMEASimulator:
         twd_degrees: float = DEFAULT_TWD,
         mag_variation: float = DEFAULT_MAGVAR,
         start_datetime: Optional[datetime] = None,
+        ais_num_targets: int = 0,
+        ais_max_cog_offset: float = 20.0,
+        ais_max_sog_offset: float = 2.0,
     ) -> None:
         self.host = host
         self.port = int(port)
@@ -242,6 +311,13 @@ class NMEASimulator:
         self.twd = float(twd_degrees) % 360
         self.magvar = float(mag_variation)
         self.sim_time = start_datetime.replace(tzinfo=timezone.utc) if start_datetime else None
+
+        # AIS state
+        self.ais_num_targets = int(max(0, ais_num_targets))
+        self.ais_max_cog_offset = float(max(0.0, ais_max_cog_offset))
+        self.ais_max_sog_offset = float(max(0.0, ais_max_sog_offset))
+        self.ais_targets: List[Dict] = []
+        self._init_ais_targets()
 
         # Runtime control
         self._thread: Optional[threading.Thread] = None
@@ -299,6 +375,7 @@ class NMEASimulator:
                 "magvar": self.magvar,
                 "sim_time": self.sim_time.isoformat() if self.sim_time else None,
                 "gnss": self._last_status.get("gnss") if isinstance(self._last_status, dict) else None,
+                "ais": self._last_status.get("ais") if isinstance(self._last_status, dict) else None,
             }
         return st
 
@@ -385,7 +462,11 @@ class NMEASimulator:
                     gsa = create_gpgsa('A', 3, list(used_prns), pdop, hdop, vdop)
                     gsv_list = create_gpgsv(satellites)
 
-                    full_nmea_packet = nmea_gprmc + nmea_gpgga + nmea_gpvtg + gsa + "".join(gsv_list)
+                    # AIS update and messages
+                    self._update_ais_targets(dt_hours)
+                    ais_msgs = self._build_ais_sentences(current_utc_time)
+
+                    full_nmea_packet = nmea_gprmc + nmea_gpgga + nmea_gpvtg + gsa + "".join(gsv_list) + ais_msgs
                     if self.wind_enabled:
                         nmea_wimwd = create_wimwd(self.twd, twd_mag, self.tws, tws_mps)
                         nmea_wimwv_true = create_wimwv_true(twa, self.tws)
@@ -401,7 +482,20 @@ class NMEASimulator:
                             "hdop": hdop,
                             "vdop": vdop,
                             "satellites": satellites,
-                        }
+                        },
+                        "ais": {
+                            "num_targets": self.ais_num_targets,
+                            "targets": [
+                                {
+                                    "mmsi": t["mmsi"],
+                                    "lat": t["lat"],
+                                    "lon": t["lon"],
+                                    "sog": t["sog"],
+                                    "cog": t["cog"],
+                                }
+                                for t in self.ais_targets
+                            ],
+                        },
                     }
 
                 # Send outside the lock
@@ -428,6 +522,56 @@ class NMEASimulator:
             finally:
                 self._sock = None
                 print("Simulator socket closed.")
+
+    # --- AIS internal methods ---
+    def _init_ais_targets(self) -> None:
+        self.ais_targets = []
+        for i in range(self.ais_num_targets):
+            # Random small offset around own ship (~0.2 nm)
+            dlat = random.uniform(-0.003, 0.003)
+            dlon = random.uniform(-0.003, 0.003)
+            mmsi = 999000001 + i
+            sog = max(0.0, self.sog + random.uniform(-self.ais_max_sog_offset, self.ais_max_sog_offset))
+            cog = (self.cog + random.uniform(-self.ais_max_cog_offset, self.ais_max_cog_offset)) % 360
+            self.ais_targets.append({
+                "mmsi": mmsi,
+                "lat": self.lat + dlat,
+                "lon": self.lon + dlon,
+                "sog": sog,
+                "cog": cog,
+                "hdg": cog,
+            })
+
+    def _update_ais_targets(self, dt_hours: float) -> None:
+        for t in self.ais_targets:
+            # Nudge towards own ship speed/course with allowed offsets
+            desired_cog = (self.cog + random.uniform(-self.ais_max_cog_offset, self.ais_max_cog_offset)) % 360
+            # small smoothing
+            t["cog"] = (0.8 * t["cog"] + 0.2 * desired_cog) % 360
+            desired_sog = max(0.0, self.sog + random.uniform(-self.ais_max_sog_offset, self.ais_max_sog_offset))
+            t["sog"] = max(0.0, 0.8 * t["sog"] + 0.2 * desired_sog)
+            t["hdg"] = t["cog"]
+
+            dist_nm = t["sog"] * dt_hours
+            rad_cog = math.radians(t["cog"])
+            t["lat"] += (dist_nm / 60.0) * math.cos(rad_cog)
+            lat_for_lon = max(-89.99, min(89.99, t["lat"]))
+            t["lon"] += (dist_nm / (60.0 * math.cos(math.radians(lat_for_lon)))) * math.sin(rad_cog)
+            if t["lon"] > 180:
+                t["lon"] -= 360
+            if t["lon"] < -180:
+                t["lon"] += 360
+
+    def _build_ais_sentences(self, current_utc_time: datetime) -> str:
+        if not self.ais_targets:
+            return ""
+        ts = current_utc_time.second
+        msgs = []
+        for t in self.ais_targets:
+            msgs.append(create_aivdm_type18(
+                t["mmsi"], t["lat"], t["lon"], t["sog"], t["cog"], t["hdg"], ts
+            ))
+        return "".join(msgs)
 
 
 def run_simulator(host, port, interval, **kwargs):

@@ -31,6 +31,11 @@ def data_page():
     return render_template("data.html")
 
 
+@app.route("/ais")
+def ais_page():
+    return render_template("ais.html")
+
+
 @app.route("/api/status", methods=["GET"]) 
 def api_status():
     sim = get_simulator()
@@ -66,6 +71,9 @@ def api_start():
             twd_degrees=float(data.get("twd", 270.0)),
             mag_variation=float(data.get("magvar", -2.5)),
             start_datetime=start_dt,
+            ais_num_targets=int(data.get("ais_num_targets", 0)),
+            ais_max_cog_offset=float(data.get("ais_max_cog_offset", 20.0)),
+            ais_max_sog_offset=float(data.get("ais_max_sog_offset", 2.0)),
         )
     except Exception as e:
         return jsonify({"ok": False, "error": f"Invalid parameter: {e}"}), 400
