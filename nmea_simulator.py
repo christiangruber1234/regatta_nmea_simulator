@@ -335,6 +335,7 @@ class NMEASimulator:
         ais_distribution_radius_nm: float = 1.0,
         tcp_port: Optional[int] = DEFAULT_TCP_PORT,
         tcp_host: str = "0.0.0.0",
+        gpx_track: Optional[List[Dict]] = None,
     ) -> None:
         self.host = host
         self.port = int(port)
@@ -350,6 +351,18 @@ class NMEASimulator:
         self.twd = float(twd_degrees) % 360
         self.magvar = float(mag_variation)
         self.sim_time = start_datetime.replace(tzinfo=timezone.utc) if start_datetime else None
+        # GPX playback
+        self._gpx_track = self._prepare_gpx(gpx_track)
+        self._gpx_duration_s = None
+        self._gpx_start_time = None
+        self._gpx_end_time = None
+        if self._gpx_track:
+            self._gpx_start_time = self._gpx_track[0]["time"]
+            self._gpx_end_time = self._gpx_track[-1]["time"]
+            try:
+                self._gpx_duration_s = max(0, int((self._gpx_end_time - self._gpx_start_time).total_seconds())) if (self._gpx_start_time and self._gpx_end_time) else None
+            except Exception:
+                self._gpx_duration_s = None
 
         # AIS state
         self.ais_num_targets = int(max(0, ais_num_targets))
@@ -431,6 +444,12 @@ class NMEASimulator:
                 "ais": self._last_status.get("ais") if isinstance(self._last_status, dict) else None,
                 "stream_size": len(self._stream),
                 "tcp_clients": self._tcp_clients_summary() if self.tcp_port else [],
+                "gpx_track_info": {
+                    "points": len(self._gpx_track) if self._gpx_track else 0,
+                    "start_time": self._gpx_start_time.isoformat() if self._gpx_start_time else None,
+                    "end_time": self._gpx_end_time.isoformat() if self._gpx_end_time else None,
+                    "duration_s": self._gpx_duration_s,
+                } if self._gpx_track else None,
             }
         return st
 
@@ -479,27 +498,30 @@ class NMEASimulator:
                         current_utc_time = self.sim_time
                         self.sim_time = self.sim_time + timedelta(seconds=self.interval)
 
-                    # Update simulated kinematics
-                    dt_hours = self.interval / 3600.0
-                    dist_nm = self.sog * dt_hours
+                    # Update simulated kinematics or follow GPX track
+                    if self._gpx_track and (self._gpx_start_time is not None):
+                        self._update_from_gpx(current_utc_time)
+                    else:
+                        dt_hours = self.interval / 3600.0
+                        dist_nm = self.sog * dt_hours
 
-                    rad_lat = math.radians(self.lat)
-                    rad_cog = math.radians(self.cog)
+                        rad_lat = math.radians(self.lat)
+                        rad_cog = math.radians(self.cog)
 
-                    self.lat += (dist_nm / 60.0) * math.cos(rad_cog)
-                    if abs(self.lat) > 90:
-                        self.lat = math.copysign(90, self.lat)
+                        self.lat += (dist_nm / 60.0) * math.cos(rad_cog)
+                        if abs(self.lat) > 90:
+                            self.lat = math.copysign(90, self.lat)
 
-                    if abs(self.lat) < 89.99:
-                        self.lon += (dist_nm / (60.0 * math.cos(rad_lat))) * math.sin(rad_cog)
-                    if self.lon > 180:
-                        self.lon -= 360
-                    if self.lon < -180:
-                        self.lon += 360
+                        if abs(self.lat) < 89.99:
+                            self.lon += (dist_nm / (60.0 * math.cos(rad_lat))) * math.sin(rad_cog)
+                        if self.lon > 180:
+                            self.lon -= 360
+                        if self.lon < -180:
+                            self.lon += 360
 
-                    # Random walk adjustments
-                    self.sog = max(0, min(self.sog + random.uniform(-0.2, 0.2), 15.0))
-                    self.cog = (self.cog + random.uniform(-2.0, 2.0)) % 360
+                        # Random walk adjustments
+                        self.sog = max(0, min(self.sog + random.uniform(-0.2, 0.2), 15.0))
+                        self.cog = (self.cog + random.uniform(-2.0, 2.0)) % 360
                     self.tws = max(0, min(self.tws + random.uniform(-0.3, 0.3), 30.0))
                     self.twd = (self.twd + random.uniform(-3.0, 3.0)) % 360
 
@@ -785,6 +807,118 @@ class NMEASimulator:
                 "connected_at": c.get("connected_at", "")
             })
         return out
+
+    # --- GPX helpers ---
+    def _prepare_gpx(self, track):
+        if not track:
+            return None
+        out = []
+        for p in track:
+            try:
+                lat = float(p.get("lat"))
+                lon = float(p.get("lon"))
+            except Exception:
+                continue
+            t = p.get("time")
+            if isinstance(t, datetime):
+                if t.tzinfo is None:
+                    t = t.replace(tzinfo=timezone.utc)
+                t = t.astimezone(timezone.utc)
+            else:
+                t = None
+            out.append({"lat": lat, "lon": lon, "time": t})
+        if len(out) < 2:
+            return None
+        # Ensure monotonic by time if present
+        if all(o.get("time") is not None for o in out):
+            out.sort(key=lambda x: x["time"])  # type: ignore
+        return out
+
+    @staticmethod
+    def _haversine_nm(lat1, lon1, lat2, lon2):
+        R_km = 6371.0
+        dlat = math.radians(lat2 - lat1)
+        dlon = math.radians(lon2 - lon1)
+        a = math.sin(dlat/2)**2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon/2)**2
+        c = 2 * math.asin(math.sqrt(a))
+        km = R_km * c
+        return km * 0.539957
+
+    @staticmethod
+    def _bearing_deg(lat1, lon1, lat2, lon2):
+        y = math.sin(math.radians(lon2 - lon1)) * math.cos(math.radians(lat2))
+        x = math.cos(math.radians(lat1)) * math.sin(math.radians(lat2)) - math.sin(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.cos(math.radians(lon2 - lon1))
+        brng = (math.degrees(math.atan2(y, x)) + 360) % 360
+        return brng
+
+    def _update_from_gpx(self, current_utc_time: datetime) -> None:
+        # If track has timestamps: interpolate by time; else step through points uniformly by distance
+        if not self._gpx_track:
+            return
+        # Determine target time
+        if self.sim_time is None:
+            tnow = current_utc_time
+        else:
+            tnow = self.sim_time
+
+        # If we have times for all points, use them
+        if self._gpx_start_time and self._gpx_end_time and all(p.get("time") is not None for p in self._gpx_track):
+            if tnow <= self._gpx_start_time:
+                p = self._gpx_track[0]
+                self.lat, self.lon = p["lat"], p["lon"]
+                self.sog = 0.0
+                # keep previous cog
+                return
+            if tnow >= self._gpx_end_time:
+                p = self._gpx_track[-1]
+                self.lat, self.lon = p["lat"], p["lon"]
+                self.sog = 0.0
+                return
+            # Find surrounding points
+            # Linear scan is OK for moderate sizes; could be optimized
+            prev = None
+            nxt = None
+            for i in range(1, len(self._gpx_track)):
+                if self._gpx_track[i]["time"] >= tnow:
+                    prev = self._gpx_track[i-1]
+                    nxt = self._gpx_track[i]
+                    break
+            if not prev or not nxt:
+                return
+            t0 = prev["time"]
+            t1 = nxt["time"]
+            span = max(1e-6, (t1 - t0).total_seconds())
+            frac = min(1.0, max(0.0, (tnow - t0).total_seconds() / span))
+            self.lat = prev["lat"] + (nxt["lat"] - prev["lat"]) * frac
+            self.lon = prev["lon"] + (nxt["lon"] - prev["lon"]) * frac
+            dist_nm = self._haversine_nm(prev["lat"], prev["lon"], nxt["lat"], nxt["lon"]) * frac
+            self.sog = max(0.0, (dist_nm / (span / 3600.0)))
+            self.cog = self._bearing_deg(prev["lat"], prev["lon"], nxt["lat"], nxt["lon"]) % 360
+        else:
+            # No timestamps: advance along the polyline at current SOG
+            # We'll approximate by moving towards the next point by distance each tick
+            if not hasattr(self, "_gpx_cursor"):
+                self._gpx_cursor = 0
+                self.lat = self._gpx_track[0]["lat"]
+                self.lon = self._gpx_track[0]["lon"]
+            target = self._gpx_track[min(self._gpx_cursor+1, len(self._gpx_track)-1)]
+            dist_to_target = self._haversine_nm(self.lat, self.lon, target["lat"], target["lon"])  # nm
+            step_nm = max(0.0, self.sog) * (self.interval / 3600.0)
+            if dist_to_target <= 1e-3 or step_nm >= dist_to_target:
+                # Move to next point
+                self.lat, self.lon = target["lat"], target["lon"]
+                self._gpx_cursor = min(self._gpx_cursor+1, len(self._gpx_track)-2)
+                nxt = self._gpx_track[self._gpx_cursor+1]
+                self.cog = self._bearing_deg(target["lat"], target["lon"], nxt["lat"], nxt["lon"]) % 360
+            else:
+                # Interpolate small step along bearing
+                br = math.radians(self._bearing_deg(self.lat, self.lon, target["lat"], target["lon"]))
+                # Approximate small distance move in degrees
+                dlat = (step_nm / 60.0) * math.cos(br)
+                dlon = (step_nm / (60.0 * max(1e-6, math.cos(math.radians(self.lat))))) * math.sin(br)
+                self.lat += dlat
+                self.lon += dlon
+                self.cog = (math.degrees(br) + 360) % 360
 
 
 def run_simulator(host, port, interval, **kwargs):
