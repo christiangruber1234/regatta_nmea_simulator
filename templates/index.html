@@ -45,10 +45,14 @@
         <div class="grid">
           <div class="span-2">
             <label>Mode</label>
-            <select id="init_mode">
-              <option value="manual" selected>Set parameters</option>
-              <option value="gpx">GPX track</option>
-            </select>
+            <div class="switch-row">
+              <span class="muted">Set parameters</span>
+              <label class="switch">
+                <input id="init_mode_toggle" type="checkbox" />
+                <span class="slider"></span>
+              </label>
+              <span class="muted">GPX track</span>
+            </div>
           </div>
         </div>
 

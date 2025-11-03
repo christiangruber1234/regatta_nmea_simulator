@@ -21,7 +21,8 @@ const statusText = document.getElementById('statusText');
 const startBtn = document.getElementById('startBtn');
 const stopBtn = document.getElementById('stopBtn');
 const restartBtn = document.getElementById('restartBtn');
-const initModeEl = document.getElementById('init_mode');
+const initModeToggle = document.getElementById('init_mode_toggle');
+const initModeEl = document.getElementById('init_mode'); // legacy select if present
 const gpxFileEl = document.getElementById('gpx_file');
 const gpxMetaEl = document.getElementById('gpxMeta');
 const manualParams = document.getElementById('manual_params');
@@ -106,8 +107,17 @@ map.on('click', (e) => {
 });
 
 // Mode toggle for Initial parameters
+function getInitMode(){
+  if (initModeToggle) return initModeToggle.checked ? 'gpx' : 'manual';
+  if (initModeEl) return initModeEl.value;
+  return 'manual';
+}
+function setInitMode(mode){
+  if (initModeToggle){ initModeToggle.checked = (mode === 'gpx'); }
+  if (initModeEl){ initModeEl.value = mode; }
+}
 function updateInitModeUI(){
-  const mode = initModeEl ? initModeEl.value : 'manual';
+  const mode = getInitMode();
   if (mode === 'gpx'){
     if (manualParams) manualParams.style.display = 'none';
     if (gpxParams) gpxParams.style.display = '';
@@ -116,7 +126,9 @@ function updateInitModeUI(){
     if (gpxParams) gpxParams.style.display = 'none';
   }
 }
-if (initModeEl){ initModeEl.addEventListener('change', updateInitModeUI); updateInitModeUI(); }
+if (initModeEl){ initModeEl.addEventListener('change', () => { updateInitModeUI(); persistUiState(); }); }
+if (initModeToggle){ initModeToggle.addEventListener('change', () => { updateInitModeUI(); persistUiState(); }); }
+updateInitModeUI();
 
 // Upload GPX
 async function uploadGpx(file){
@@ -135,6 +147,7 @@ async function uploadGpx(file){
     const dur = (g.duration_s != null) ? `${Math.floor(g.duration_s/3600)}h ${Math.floor((g.duration_s%3600)/60)}m ${g.duration_s%60}s` : 'n/a';
     gpxMetaEl.innerHTML = `
       <ul>
+        <li>File: <b>${g.filename || '(unnamed)'}</b></li>
         <li>Points: <b>${g.points_count}</b></li>
         <li>Length: <b>${g.length_nm} nm</b></li>
         <li>Has time: <b>${g.has_time ? 'Yes' : 'No'}</b></li>
@@ -235,7 +248,7 @@ if (gpxSliderEl){ gpxSliderEl.addEventListener('input', updateGpxSliderPreview);
 
 // Persist UI mode and slider changes
 function persistUiState(){
-  try { localStorage.setItem('ui.initMode', initModeEl ? initModeEl.value : 'manual'); } catch(e){}
+  try { localStorage.setItem('ui.initMode', getInitMode()); } catch(e){}
   try { localStorage.setItem('gpx.selectedOffsetS', String(gpxSelectedOffsetS || 0)); } catch(e){}
   try { localStorage.setItem('gpx.selectedFraction', String(gpxSelectedFraction || 0)); } catch(e){}
 }
@@ -245,8 +258,8 @@ if (gpxSliderEl){ gpxSliderEl.addEventListener('change', persistUiState); }
 // Rehydrate from persisted state on load
 function restorePersisted(){
   try {
-    const savedMode = localStorage.getItem('ui.initMode');
-    if (savedMode && initModeEl){ initModeEl.value = savedMode; updateInitModeUI(); }
+  const savedMode = localStorage.getItem('ui.initMode');
+  if (savedMode){ setInitMode(savedMode); updateInitModeUI(); }
     const savedMeta = localStorage.getItem('gpx.currentMeta');
     const savedId = localStorage.getItem('gpx.currentId');
     if (savedMeta){
@@ -257,6 +270,7 @@ function restorePersisted(){
         const dur = (g.duration_s != null) ? `${Math.floor(g.duration_s/3600)}h ${Math.floor((g.duration_s%3600)/60)}m ${g.duration_s%60}s` : 'n/a';
         gpxMetaEl.innerHTML = `
           <ul>
+            <li>File: <b>${g.filename || '(unnamed)'}</b></li>
             <li>Points: <b>${g.points_count}</b></li>
             <li>Length: <b>${g.length_nm} nm</b></li>
             <li>Has time: <b>${g.has_time ? 'Yes' : 'No'}</b></li>
@@ -350,7 +364,7 @@ async function start(){
     port: parseInt(portEl.value, 10),
     tcp_port: parseInt(tcpPortEl.value, 10),
     tcp_host: tcpHostEl ? tcpHostEl.value : '0.0.0.0',
-    interval: parseFloat((initModeEl && initModeEl.value==='gpx' ? intervalGpxEl.value : intervalEl.value)),
+  interval: parseFloat((getInitMode()==='gpx' ? intervalGpxEl.value : intervalEl.value)),
     wind_enabled: windEl.value === 'true',
     lat: parseFloat(latEl.value),
     lon: parseFloat(lonEl.value),
@@ -361,7 +375,7 @@ async function start(){
     twd: parseFloat(twdEl.value),
     magvar: parseFloat(magvarEl.value),
   };
-  if (initModeEl && initModeEl.value === 'gpx' && currentGpxId){
+  if (getInitMode()==='gpx' && currentGpxId){
     body.gpx_id = currentGpxId;
     if (currentGpxMeta && currentGpxMeta.has_time){ body.gpx_offset_s = gpxSelectedOffsetS; }
     else { body.gpx_start_fraction = gpxSelectedFraction; }
@@ -381,7 +395,7 @@ async function restart(){
     port: parseInt(portEl.value, 10),
     tcp_port: parseInt(tcpPortEl.value, 10),
     tcp_host: tcpHostEl ? tcpHostEl.value : '0.0.0.0',
-    interval: parseFloat((initModeEl && initModeEl.value==='gpx' ? intervalGpxEl.value : intervalEl.value)),
+  interval: parseFloat((getInitMode()==='gpx' ? intervalGpxEl.value : intervalEl.value)),
     wind_enabled: windEl.value === 'true',
     lat: parseFloat(latEl.value),
     lon: parseFloat(lonEl.value),
@@ -392,7 +406,7 @@ async function restart(){
     twd: parseFloat(twdEl.value),
     magvar: parseFloat(magvarEl.value),
   };
-  if (initModeEl && initModeEl.value === 'gpx' && currentGpxId){
+  if (getInitMode()==='gpx' && currentGpxId){
     body.gpx_id = currentGpxId;
     if (currentGpxMeta && currentGpxMeta.has_time){ body.gpx_offset_s = gpxSelectedOffsetS; }
     else { body.gpx_start_fraction = gpxSelectedFraction; }

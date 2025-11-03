@@ -382,6 +382,7 @@ def api_upload_gpx():
     # Serialize times to ISO for storage meta; keep datetime objects in points for the simulator
     meta = {
         "id": gpx_id,
+        "filename": getattr(f, 'filename', None),
         "points_count": len(pts),
         "length_nm": round(length_nm, 3),
         "has_time": bool(has_time),
