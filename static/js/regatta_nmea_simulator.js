@@ -367,7 +367,9 @@ async function refreshStatus(){
   try {
     const data = await api('GET', '/api/status');
     const running = !!data.running;
-    statusText.textContent = running ? `Status: Running (lat=${(data.lat||0).toFixed?.(4)}, lon=${(data.lon||0).toFixed?.(4)}, port=${data.port})` : 'Status: Stopped';
+    if (statusText) {
+      statusText.textContent = running ? `Status: Running (lat=${(data.lat||0).toFixed?.(4)}, lon=${(data.lon||0).toFixed?.(4)}, port=${data.port})` : 'Status: Stopped';
+    }
     startBtn.disabled = running;
     // Update Start button label to show uptime as HH:MM:SS and animate border while running
     try {
@@ -445,7 +447,7 @@ async function refreshStatus(){
       }
     }
   } catch (e) {
-    statusText.textContent = 'Status: Unknown';
+    if (statusText) { statusText.textContent = 'Status: Unknown'; }
   }
 }
 
