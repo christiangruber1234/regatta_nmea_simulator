@@ -41,6 +41,11 @@
   <body>
     <header class="app-header">
       <h1>Regatta NMEA 0183 Simulator</h1>
+      <div class="app-header-center">
+        <button id="startBtn" class="control-btn">Start</button>
+        <button id="stopBtn" class="control-btn">Stop</button>
+        <button id="restartBtn" class="control-btn">Restart</button>
+      </div>
       <nav class="app-nav">
         <a href="/">SETTINGS</a>
         <a href="/ais">AIS</a>
@@ -124,7 +129,8 @@
       </section>
     </main>
 
-    <script>
+  <script src="/static/js/header_controls.js"></script>
+  <script>
       // Theme toggle for this page
       const html = document.documentElement;
       const themeBtn = document.getElementById('themeBtn');

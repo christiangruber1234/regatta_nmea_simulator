@@ -18,6 +18,11 @@
   <body>
     <header class="app-header">
       <h1>Regatta NMEA 0183 Simulator</h1>
+      <div class="app-header-center">
+        <button id="startBtn" class="control-btn">Start</button>
+        <button id="stopBtn" class="control-btn">Stop</button>
+        <button id="restartBtn" class="control-btn">Restart</button>
+      </div>
       <nav class="app-nav">
         <a href="/">SETTINGS</a>
         <a href="/ais">AIS</a>
@@ -79,7 +84,8 @@
     </main>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script>
+  <script src="/static/js/header_controls.js"></script>
+  <script>
       const html = document.documentElement;
       const themeBtn = document.getElementById('themeBtn');
       const savedTheme = localStorage.getItem('theme') || 'light';
@@ -205,9 +211,9 @@
       async function refresh(){
         try{
           const { running, ...rest } = await api('GET', '/api/status');
-          document.getElementById('statusText').textContent = running ? 'Status: Running' : 'Status: Stopped';
+          const st = document.getElementById('statusText'); if (st) st.textContent = running ? 'Status: Running' : 'Status: Stopped';
           updateMarkers({ running, ...rest });
-        }catch(e){ document.getElementById('statusText').textContent = 'Status: Unknown'; }
+        }catch(e){ const st = document.getElementById('statusText'); if (st) st.textContent = 'Status: Unknown'; }
       }
 
       async function apply(){
