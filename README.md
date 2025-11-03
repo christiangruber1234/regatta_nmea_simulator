@@ -1,6 +1,6 @@
 # Regatta NMEA 0183 Simulator
 
-A lightweight, batteries-included NMEA 0183 simulator with a web UI, UDP output, optional TCP streaming, AIS target simulation, and a live map.
+A lightweight, batteries-included NMEA 0183 simulator with a web UI, UDP output, optional TCP streaming, AIS target simulation, GPX playback, and live maps with seamarks.
 
 Fork note: This project was originally created by Christian Heiling and forked from his work.
 
@@ -13,11 +13,19 @@ Fork note: This project was originally created by Christian Heiling and forked f
 - Realistic simulation: SOG, COG, wind speed/direction and position evolve over time
 - AIS targets: configurable count, random spatial distribution, speed/course offsets
 - Built-in TCP server to stream the same NMEA payload to multiple clients
-- Web UI (Leaflet + OSM)
-  - Control page: network, initial parameters, wind, start/stop/restart
-  - Night mode switches map to a dark OSM tileset automatically
-  - AIS page: configure AIS parameters and visualize targets on the map
-  - Data page: status, GNSS details, TCP clients, and a live data stream console
+- GPX track mode
+  - Upload a GPX and play the simulation along the track by time or by index
+  - Precise slider preview (time-aligned) and simulator start alignment at the selected position
+  - AIS targets follow the GPX with slight offsets for realism
+  - Server-side saving of uploaded GPX under `uploads/gpx/`
+- Unified header controls on all pages
+  - Start / Stop / Restart in the header, centered
+  - Live “RUNNING HH:MM:SS” timer and a pulsing green outline while running
+- Web UI (Leaflet + OSM + OpenSeaMap)
+  - SETTINGS page: network, initial parameters, manual vs GPX mode, wind
+  - AIS page: configure AIS targets and visualize them
+  - STATUS page: rich GNSS view, TCP clients, and a live NMEA/AIS console
+  - Theme toggle (light/dark) switches map tiles; OpenSeaMap seamarks overlay
 
 ## Requirements
 
@@ -62,45 +70,52 @@ Defaults: UDP to 127.0.0.1:10110, 1 Hz.
 
 Pages (templates in `templates/`):
 
-- CONTROL (`/`)
+- SETTINGS (`/`)
+  - Header controls: Start / Stop / Restart with running timer
   - Network
     - UDP address (default 127.0.0.1)
     - UDP Port (default 10110)
     - TCP interface (default 0.0.0.0)
     - TCP Port (default 10111)
   - Initial parameters
-    - Start Latitude / Longitude
-    - Start Date & Time (UTC)
-    - Interval (s)
-    - Initial SOG (kn), Initial COG (°T), Magnetic Variation (°)
+    - Manual vs GPX mode (toggle)
+    - Manual: Start Latitude/Longitude, Start Date & Time (UTC), Interval (s), Initial SOG/COG, Magnetic Variation (°)
+    - GPX: Upload file, Interval (s), filename bar, slider for time or index with precise preview
   - Wind
-    - Wind Enabled (Yes/No)
-    - Initial TWS (kn), Initial TWD (°T)
-  - Actions: Start, Stop, Restart
-  - Map: click/drag to set starting position; dark map tiles in night mode
+    - Toggle On/Off; shows/hides TWS/TWD inputs
+  - Map
+    - Click/drag to set starting position (manual mode); theme-aware tiles; OpenSeaMap seamarks overlay
 
 - AIS (`/ais`)
+  - Header controls: Start / Stop / Restart with running timer
   - Options: Number of targets, max course/speed offsets, distribution radius (nm)
   - Apply & Restart to reconfigure
-  - Map + table of simulated AIS targets
+  - Map + table of simulated AIS targets; auto-fit to targets initially
 
-- DATA (`/data`)
-  - Live status (running, position, SOG/COG, wind, sim time)
-  - GNSS satellites in view/used and DOPs
+- STATUS (`/data`)
+  - Header controls: Start / Stop / Restart with running timer
+  - Live status (position, SOG/COG, wind, sim time)
+  - GNSS satellites (sky plot + SNR bars) and DOPs
   - TCP clients list
   - Live data stream console (last 200 lines)
 
 Static assets are in `static/`:
 
-- `static/js/regatta_nmea_simulator.js` — CONTROL page logic (map, start/stop API)
-- `static/css/styles.css` — Shared styles for all pages
+- `static/js/regatta_nmea_simulator.js` — SETTINGS page logic (map, start/restart payloads, GPX UI)
+- `static/js/header_controls.js` — Shared header Start/Stop/Restart with running timer across pages
+- `static/css/styles.css` — Shared styles, theme, header layout, animated running state
+
+Notes:
+- The old inline status line under the Wind section was removed; the header controls reflect the state instead.
 
 ## REST API
 
 All endpoints return/consume JSON.
 
 - GET `/api/status`
-  - Returns: `{ running, host, port, tcp_port, tcp_host, interval, wind_enabled, lat, lon, sog, cog, tws, twd, magvar, sim_time, gnss, ais, stream_size, tcp_clients }`
+  - Returns: `{ running, host, port, tcp_port, tcp_host, interval, wind_enabled, lat, lon, sog, cog, tws, twd, magvar, sim_time, started_at, gnss, ais, stream_size, tcp_clients, gpx_track_info }`
+  - `started_at` is an ISO8601 timestamp used for the running timer
+  - `gpx_track_info` includes `{ points, start_time, end_time, duration_s, has_time, progress }`, where `progress` is `{ mode: 'time', offset_s }` or `{ mode: 'index', fraction }`
 
 - GET `/api/stream?limit=100`
   - Returns the latest NMEA/AIS lines (up to `limit`, default 100)
@@ -115,12 +130,22 @@ All endpoints return/consume JSON.
     - Navigation: `sog`, `cog`, `magvar`
     - Wind: `wind_enabled` (bool), `tws`, `twd`
     - AIS: `ais_num_targets`, `ais_max_cog_offset`, `ais_max_sog_offset`, `ais_distribution_radius_nm`
+    - GPX: `gpx_id` (from upload), and one of:
+      - `gpx_offset_s` (start at GPX start time + offset seconds)
+      - `gpx_start_fraction` (0..1) for tracks without timestamps
 
 - POST `/api/stop`
   - Stops the simulator.
 
 - POST `/api/restart`
   - Stops (if running) and starts with the provided body parameters (same as `/api/start`).
+
+- POST `/api/upload_gpx`
+  - Upload a GPX file to play back
+  - Returns `{ ok, gpx }` where `gpx` includes:
+    - `id`, `filename`, `saved_path` (server-side saved under `uploads/gpx/`)
+    - `points_count`, `length_nm`, `has_time`, `start_time`, `end_time`, `duration_s`
+    - `path` (downsampled coordinates for plotting), and `timeline` (time→position samples for accurate slider)
 
 Notes:
 - The UDP destination host is normalized: `0.0.0.0`/empty becomes `127.0.0.1`.
@@ -168,9 +193,9 @@ Outputs each tick:
 ## Map tiles and night mode
 
 - Light: standard OpenStreetMap tiles
-- Dark/Night: Carto “Dark Matter” tiles (OSM-derived) automatically used in night mode
-
-Attribution is included via Leaflet layer options.
+- Dark/Night: Carto “Dark Matter” tiles (OSM-derived) used when night theme is selected
+- OpenSeaMap seamarks overlay enabled on all maps
+- The UI hides the Leaflet attribution control for a cleaner look; ensure you review upstream tile provider terms if redistributing.
 
 ## Troubleshooting
 
@@ -187,9 +212,10 @@ Attribution is included via Leaflet layer options.
 
 - `nmea_simulator.py` — NMEASimulator class and CLI
 - `nmea_simulator_flask.py` — Flask server exposing the UI and REST API
-- `templates/` — `index.html` (CONTROL), `ais.html` (AIS), `data.html` (DATA)
-- `static/js/regatta_nmea_simulator.js` — CONTROL page logic
-- `static/css/styles.css` — shared styles
+- `templates/` — `index.html` (SETTINGS), `ais.html` (AIS), `data.html` (STATUS)
+- `static/js/regatta_nmea_simulator.js` — SETTINGS page logic
+- `static/js/header_controls.js` — Header Start/Stop/Restart on all pages
+- `static/css/styles.css` — shared styles, theme, header and button animations
 - `static/skippers.txt` — optional names used for AIS vessel names
 - `requirements.txt` — Python dependencies (Flask)
 
