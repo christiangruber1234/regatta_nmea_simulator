@@ -336,6 +336,7 @@ class NMEASimulator:
         tcp_port: Optional[int] = DEFAULT_TCP_PORT,
         tcp_host: str = "0.0.0.0",
         gpx_track: Optional[List[Dict]] = None,
+        gpx_start_fraction: Optional[float] = None,
     ) -> None:
         self.host = host
         self.port = int(port)
@@ -363,6 +364,19 @@ class NMEASimulator:
                 self._gpx_duration_s = max(0, int((self._gpx_end_time - self._gpx_start_time).total_seconds())) if (self._gpx_start_time and self._gpx_end_time) else None
             except Exception:
                 self._gpx_duration_s = None
+            # Initialize cursor for non-timestamped tracks based on fraction
+            if (self._gpx_duration_s is None or self._gpx_start_time is None or self._gpx_end_time is None) and (gpx_start_fraction is not None):
+                try:
+                    f = max(0.0, min(1.0, float(gpx_start_fraction)))
+                    idx = int(round(f * (len(self._gpx_track) - 1)))
+                    idx = max(0, min(idx, len(self._gpx_track) - 2))
+                    self._gpx_cursor = idx
+                    self.lat = self._gpx_track[idx]["lat"]
+                    self.lon = self._gpx_track[idx]["lon"]
+                    nxt = self._gpx_track[idx+1]
+                    self.cog = self._bearing_deg(self.lat, self.lon, nxt["lat"], nxt["lon"]) % 360
+                except Exception:
+                    pass
 
         # AIS state
         self.ais_num_targets = int(max(0, ais_num_targets))

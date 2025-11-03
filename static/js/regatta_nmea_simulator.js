@@ -29,6 +29,11 @@ const gpxParams = document.getElementById('gpx_params');
 const intervalGpxEl = document.getElementById('interval_gpx');
 let currentGpxId = null;
 let gpxPolyline = null;
+let currentGpxMeta = null;
+let gpxSliderEl = document.getElementById('gpx_slider');
+let gpxCursorLabel = document.getElementById('gpxCursorLabel');
+let gpxSelectedOffsetS = 0; // seconds from GPX start when time data exists
+let gpxSelectedFraction = 0; // 0..1 when no time
 
 // Theme toggle
 const savedTheme = localStorage.getItem('theme') || 'light';
@@ -122,6 +127,7 @@ async function uploadGpx(file){
   if(!res.ok){ throw new Error(data.error || 'Upload failed'); }
   const g = data.gpx;
   currentGpxId = g.id;
+  currentGpxMeta = g;
   if (gpxMetaEl){
     const dur = (g.duration_s != null) ? `${Math.floor(g.duration_s/3600)}h ${Math.floor((g.duration_s%3600)/60)}m ${g.duration_s%60}s` : 'n/a';
     gpxMetaEl.innerHTML = `
@@ -133,6 +139,17 @@ async function uploadGpx(file){
         <li>End: <b>${g.end_time || 'n/a'}</b></li>
         <li>Duration: <b>${dur}</b></li>
       </ul>`;
+  }
+  // Prepare slider
+  if (gpxSliderEl){
+    if (g.has_time && typeof g.duration_s === 'number'){
+      gpxSliderEl.min = 0; gpxSliderEl.max = g.duration_s; gpxSliderEl.step = 1; gpxSliderEl.value = 0; gpxSelectedOffsetS = 0;
+    } else {
+      // Use path length for index-based slider
+      const maxIdx = Math.max(0, (g.path || []).length - 1);
+      gpxSliderEl.min = 0; gpxSliderEl.max = maxIdx; gpxSliderEl.step = 1; gpxSliderEl.value = 0; gpxSelectedFraction = 0;
+    }
+    updateGpxSliderPreview();
   }
   // Draw polyline and fit bounds
   try{
@@ -154,6 +171,42 @@ if (gpxFileEl){
     if (f){ uploadGpx(f).catch(err => alert(err.message)); }
   });
 }
+
+function lerp(a,b,t){ return a + (b-a)*t; }
+function updateGpxSliderPreview(){
+  if(!currentGpxMeta || !Array.isArray(currentGpxMeta.path) || currentGpxMeta.path.length === 0) return;
+  const path = currentGpxMeta.path;
+  if (currentGpxMeta.has_time && typeof currentGpxMeta.duration_s === 'number'){
+    const t = parseInt(gpxSliderEl.value, 10) || 0;
+    gpxSelectedOffsetS = t;
+    // Position preview: approximate by fraction of time over total
+    const frac = Math.max(0, Math.min(1, t / Math.max(1, currentGpxMeta.duration_s)));
+    const idxF = frac * Math.max(1, path.length - 1);
+    const i0 = Math.floor(idxF), i1 = Math.min(path.length - 1, i0 + 1);
+    const f = idxF - i0;
+    const [lat0, lon0] = path[i0];
+    const [lat1, lon1] = path[i1];
+    const lat = lerp(lat0, lat1, f);
+    const lon = lerp(lon0, lon1, f);
+    marker.setLatLng([lat, lon]);
+    syncInputsFromMarker();
+    if (gpxCursorLabel){
+      const start = currentGpxMeta.start_time ? new Date(currentGpxMeta.start_time) : null;
+      const ts = start ? new Date(start.getTime() + t*1000).toISOString() : `+${t}s`;
+      gpxCursorLabel.textContent = `Selected: ${ts}`;
+    }
+  } else {
+    const idx = parseInt(gpxSliderEl.value, 10) || 0;
+    const i0 = Math.max(0, Math.min(path.length - 1, idx));
+    const [lat, lon] = path[i0];
+    marker.setLatLng([lat, lon]);
+    syncInputsFromMarker();
+    gpxSelectedFraction = (path.length > 1) ? (i0 / (path.length - 1)) : 0;
+    if (gpxCursorLabel){ gpxCursorLabel.textContent = `Selected path index: ${i0}/${path.length-1}`; }
+  }
+}
+
+if (gpxSliderEl){ gpxSliderEl.addEventListener('input', updateGpxSliderPreview); }
 
 // API helpers
 async function api(method, path, body){
@@ -208,6 +261,8 @@ async function start(){
   };
   if (initModeEl && initModeEl.value === 'gpx' && currentGpxId){
     body.gpx_id = currentGpxId;
+    if (currentGpxMeta && currentGpxMeta.has_time){ body.gpx_offset_s = gpxSelectedOffsetS; }
+    else { body.gpx_start_fraction = gpxSelectedFraction; }
   }
   await api('POST', '/api/start', body);
   await refreshStatus();
@@ -237,6 +292,8 @@ async function restart(){
   };
   if (initModeEl && initModeEl.value === 'gpx' && currentGpxId){
     body.gpx_id = currentGpxId;
+    if (currentGpxMeta && currentGpxMeta.has_time){ body.gpx_offset_s = gpxSelectedOffsetS; }
+    else { body.gpx_start_fraction = gpxSelectedFraction; }
   }
   await api('POST', '/api/restart', body);
   await refreshStatus();

@@ -76,11 +76,19 @@ def api_start():
         start_dt_str = data.get("start_datetime")
         start_dt = None
         if start_dt_str:
-            start_dt = datetime.fromisoformat(start_dt_str)
-            if start_dt.tzinfo is None:
-                start_dt = start_dt.replace(tzinfo=timezone.utc)
-            else:
-                start_dt = start_dt.astimezone(timezone.utc)
+            # Accept ISO with 'Z' suffix
+            def _parse_time_iso_local(ts: str):
+                try:
+                    s = ts.strip()
+                    if s.endswith("Z"):
+                        s = s[:-1] + "+00:00"
+                    dt = datetime.fromisoformat(s)
+                    if dt.tzinfo is None:
+                        dt = dt.replace(tzinfo=timezone.utc)
+                    return dt.astimezone(timezone.utc)
+                except Exception:
+                    return None
+            start_dt = _parse_time_iso_local(start_dt_str)
 
         # Validate/normalize UDP destination host: 0.0.0.0 is not a valid destination
         raw_host = str(data.get("host", "127.0.0.1")).strip()
@@ -97,6 +105,9 @@ def api_start():
                 return jsonify({"ok": False, "error": "Invalid gpx_id"}), 400
             gpx_points = g.get("points")
             gpx_meta = g.get("meta")
+        # Optional GPX cursor controls from UI
+        gpx_offset_s = data.get("gpx_offset_s")
+        gpx_start_fraction = data.get("gpx_start_fraction")
 
         params = dict(
             host=raw_host,
@@ -119,17 +130,32 @@ def api_start():
             ais_distribution_radius_nm=float(data.get("ais_distribution_radius_nm", 10.0)),
             gpx_track=gpx_points,
         )
-        # If GPX provided and it has timestamps, align simulator start to GPX start unless user explicitly provided start_datetime
-        if gpx_meta and gpx_meta.get("start_time") and start_dt is None:
+        # If GPX provided and it has timestamps, align simulator start to requested offset or GPX start
+        if gpx_meta and gpx_meta.get("start_time"):
             try:
-                params["start_datetime"] = datetime.fromisoformat(gpx_meta["start_time"]).astimezone(timezone.utc)
+                gpx_start_dt = datetime.fromisoformat(gpx_meta["start_time"]).astimezone(timezone.utc)
             except Exception:
-                pass
+                gpx_start_dt = None
+            if gpx_start_dt is not None:
+                if gpx_offset_s is not None:
+                    try:
+                        off = int(float(gpx_offset_s))
+                        params["start_datetime"] = (gpx_start_dt + timedelta(seconds=off)).astimezone(timezone.utc)
+                    except Exception:
+                        pass
+                elif start_dt is None:
+                    params["start_datetime"] = gpx_start_dt
         # If GPX provided, override initial lat/lon to the first track point
         if gpx_points:
             try:
                 params["start_lat"] = float(gpx_points[0]["lat"])  # type: ignore
                 params["start_lon"] = float(gpx_points[0]["lon"])  # type: ignore
+            except Exception:
+                pass
+        # If GPX has no timestamps and a start fraction is provided, forward to simulator
+        if gpx_points and (gpx_meta and not gpx_meta.get("has_time")) and gpx_start_fraction is not None:
+            try:
+                params["gpx_start_fraction"] = max(0.0, min(1.0, float(gpx_start_fraction)))
             except Exception:
                 pass
     except Exception as e:
