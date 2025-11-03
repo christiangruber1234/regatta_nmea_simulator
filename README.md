@@ -2,6 +2,8 @@
 
 Lightweight NMEA 0183 UDP simulator for testing marine software without a boat. It generates realistic GPS and wind sentences and broadcasts them to a configurable host and port.
 
+Fork note: This project was originally created by Christian Heiling and was forked from his repository: [REPLACE-WITH-REPO-LINK].
+
 ## What it does
 
 - Sends a continuous stream of NMEA 0183 sentences over UDP:
@@ -72,7 +74,3 @@ All other polar-performance and GUI tools have been removed in this repository; 
 ## License
 
 MIT License. See the repository for details.
-
-### Support the project
-
-If this simulator helps you, you can support development here: [Donate via PayPal](https://paypal.me/ChristianHeiling).

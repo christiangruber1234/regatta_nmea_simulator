@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>NMEA Simulator Data</title>
+    <link rel="stylesheet" href="https://unpkg.com/modern-css-reset/dist/reset.min.css" />
+    <link rel="stylesheet" href="/static/css/styles.css" />
+    <style>
+      .data-container { max-width: 1100px; margin: 20px auto; padding: 16px; }
+      pre { background: var(--card-bg); padding: 12px; border-radius: 8px; overflow-x: auto; }
+      table { width: 100%; border-collapse: collapse; }
+      th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--border-color); }
+      .muted { color: var(--muted); }
+      .header-links { display: flex; gap: 12px; align-items: center; }
+      .header-links a { color: var(--text-color); text-decoration: none; border: 1px solid var(--border-color); padding: 6px 10px; border-radius: 6px; }
+      .header-links a:hover { background: var(--hover-bg); }
+    </style>
+  </head>
+  <body>
+    <header class="app-header">
+      <h1>Current Generated Data</h1>
+      <div class="header-links">
+        <a href="/">Controls</a>
+      </div>
+    </header>
+
+    <main class="data-container">
+      <section class="card" style="margin-bottom: 16px;">
+        <h2>Navigation</h2>
+        <table>
+          <tbody>
+            <tr><th>Status</th><td id="status">Unknown</td></tr>
+            <tr><th>Latitude</th><td id="lat">-</td></tr>
+            <tr><th>Longitude</th><td id="lon">-</td></tr>
+            <tr><th>SOG (kn)</th><td id="sog">-</td></tr>
+            <tr><th>COG (°T)</th><td id="cog">-</td></tr>
+            <tr><th>Mag Var (°)</th><td id="magvar">-</td></tr>
+            <tr><th>Wind Enabled</th><td id="wind_enabled">-</td></tr>
+            <tr><th>TWS (kn)</th><td id="tws">-</td></tr>
+            <tr><th>TWD (°T)</th><td id="twd">-</td></tr>
+            <tr><th>Sim Time (UTC)</th><td id="sim_time">-</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="card">
+        <h2>GNSS</h2>
+        <table>
+          <tbody>
+            <tr><th>Sats in View</th><td id="siv">-</td></tr>
+            <tr><th>Sats Used</th><td id="sused">-</td></tr>
+            <tr><th>PDOP</th><td id="pdop">-</td></tr>
+            <tr><th>HDOP</th><td id="hdop">-</td></tr>
+            <tr><th>VDOP</th><td id="vdop">-</td></tr>
+          </tbody>
+        </table>
+        <h3 style="margin-top: 12px;">Satellites</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>PRN</th>
+              <th>Elev (°)</th>
+              <th>Az (°)</th>
+              <th>SNR (dB)</th>
+              <th>Used</th>
+            </tr>
+          </thead>
+          <tbody id="satRows"></tbody>
+        </table>
+      </section>
+    </main>
+
+    <script>
+      async function api(method, path){
+        const res = await fetch(path, { method });
+        const data = await res.json();
+        if(!res.ok){ throw new Error(data.error || 'Request failed'); }
+        return data;
+      }
+
+      function setText(id, val){ document.getElementById(id).textContent = val; }
+
+      function renderData(d){
+        setText('status', d.running ? 'Running' : 'Stopped');
+        setText('lat', (d.lat ?? '-'));
+        setText('lon', (d.lon ?? '-'));
+        setText('sog', (d.sog ?? '-'));
+        setText('cog', (d.cog ?? '-'));
+        setText('magvar', (d.magvar ?? '-'));
+        setText('wind_enabled', d.wind_enabled ? 'Yes' : 'No');
+        setText('tws', d.wind_enabled ? (d.tws ?? '-') : '—');
+        setText('twd', d.wind_enabled ? (d.twd ?? '-') : '—');
+        setText('sim_time', d.sim_time || '—');
+
+        const gnss = d.gnss || {};
+        setText('siv', gnss.sats_in_view ?? '-');
+        setText('sused', gnss.sats_used ?? '-');
+        setText('pdop', gnss.pdop ?? '-');
+        setText('hdop', gnss.hdop ?? '-');
+        setText('vdop', gnss.vdop ?? '-');
+
+        const rowsEl = document.getElementById('satRows');
+        rowsEl.innerHTML = '';
+        (gnss.satellites || []).forEach(s => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td>${s.prn}</td><td>${s.elev}</td><td>${s.az}</td><td>${s.snr}</td><td>${s.used ? '✓' : ''}</td>`;
+          rowsEl.appendChild(tr);
+        });
+      }
+
+      async function tick(){
+        try{
+          const data = await api('GET', '/api/status');
+          renderData(data);
+        }catch(e){ /* ignore */ }
+      }
+
+      tick();
+      setInterval(tick, 2000);
+    </script>
+  </body>
+</html>

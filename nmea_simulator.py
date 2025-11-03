@@ -21,7 +21,7 @@ import math
 import random
 import threading
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import Optional, List, Dict
 import argparse
 
 # --- Configuration ---
@@ -171,6 +171,44 @@ def create_wimwv_apparent(awa_deg, aws_knots) -> str:
     checksum = calculate_nmea_checksum(body)
     return f"${body}*{checksum}\r\n"
 
+def create_gpgsa(mode: str, fix_type: int, sv_ids: List[int], pdop: float, hdop: float, vdop: float) -> str:
+    """Creates a GPGSA sentence (DOP and active satellites).
+    mode: 'M' manual, 'A' automatic
+    fix_type: 1=no fix, 2=2D, 3=3D
+    sv_ids: up to 12 PRN numbers used for fix
+    """
+    # Pad/trim to 12 SV IDs
+    sv_fields = [str(prn).zfill(2) for prn in sv_ids[:12]]
+    while len(sv_fields) < 12:
+        sv_fields.append("")
+    body = f"GPGSA,{mode},{fix_type}," + ",".join(sv_fields) + f",{pdop:.1f},{hdop:.1f},{vdop:.1f}"
+    checksum = calculate_nmea_checksum(body)
+    return f"${body}*{checksum}\r\n"
+
+def create_gpgsv(satellites: List[Dict]) -> List[str]:
+    """Creates one or more GPGSV sentences (satellites in view).
+    satellites: list of dicts with keys prn, elev, az, snr
+    Returns list of sentence strings.
+    """
+    sentences = []
+    total_sats = len(satellites)
+    sats_per_msg = 4
+    total_msgs = max(1, (total_sats + sats_per_msg - 1) // sats_per_msg)
+    for i in range(total_msgs):
+        msg_num = i + 1
+        chunk = satellites[i*sats_per_msg:(i+1)*sats_per_msg]
+        fields = [f"GPGSV,{total_msgs},{msg_num},{total_sats:02d}"]
+        for sat in chunk:
+            prn = int(sat.get('prn', 0))
+            elev = int(sat.get('elev', 0))
+            az = int(sat.get('az', 0))
+            snr = int(sat.get('snr', 0))
+            fields.extend([str(prn).zfill(2), str(elev), str(az), str(snr)])
+        body = ",".join(fields)
+        checksum = calculate_nmea_checksum(body)
+        sentences.append(f"${body}*{checksum}\r\n")
+    return sentences
+
 
 class NMEASimulator:
     """A controllable NMEA 0183 UDP simulator running in a background thread."""
@@ -260,6 +298,7 @@ class NMEASimulator:
                 "twd": self.twd,
                 "magvar": self.magvar,
                 "sim_time": self.sim_time.isoformat() if self.sim_time else None,
+                "gnss": self._last_status.get("gnss") if isinstance(self._last_status, dict) else None,
             }
         return st
 
@@ -321,16 +360,49 @@ class NMEASimulator:
                         aws = self.tws
 
                     # Generate sentences
-                    nmea_gprmc = create_gprmc(current_utc_time, self.lat, self.lon, self.sog, self.cog, self.magvar)
-                    nmea_gpgga = create_gpgga(current_utc_time, self.lat, self.lon, num_sats=random.randint(7, 12), hdop=random.uniform(0.8, 2.0))
-                    nmea_gpvtg = create_gpvtg(self.cog, cog_mag, self.sog, sog_kmh)
+                    # GNSS simulation (GSA/GSV)
+                    sats_in_view = random.randint(8, 14)
+                    prns = random.sample(range(1, 33), sats_in_view)
+                    sats_used_count = min(random.randint(6, 12), sats_in_view)
+                    used_prns = set(prns[:sats_used_count])
+                    satellites = []
+                    for prn in prns:
+                        satellites.append({
+                            "prn": prn,
+                            "elev": random.randint(5, 85),
+                            "az": random.randint(0, 359),
+                            "snr": random.randint(20, 48),
+                            "used": prn in used_prns,
+                        })
+                    pdop = round(random.uniform(1.3, 3.5), 1)
+                    hdop = round(random.uniform(0.7, 2.5), 1)
+                    vdop = round(random.uniform(1.0, 3.0), 1)
 
-                    full_nmea_packet = nmea_gprmc + nmea_gpgga + nmea_gpvtg
+                    nmea_gprmc = create_gprmc(current_utc_time, self.lat, self.lon, self.sog, self.cog, self.magvar)
+                    nmea_gpgga = create_gpgga(current_utc_time, self.lat, self.lon, num_sats=sats_used_count, hdop=hdop)
+                    nmea_gpvtg = create_gpvtg(self.cog, cog_mag, self.sog, sog_kmh)
+                    # Build GSA and GSV
+                    gsa = create_gpgsa('A', 3, list(used_prns), pdop, hdop, vdop)
+                    gsv_list = create_gpgsv(satellites)
+
+                    full_nmea_packet = nmea_gprmc + nmea_gpgga + nmea_gpvtg + gsa + "".join(gsv_list)
                     if self.wind_enabled:
                         nmea_wimwd = create_wimwd(self.twd, twd_mag, self.tws, tws_mps)
                         nmea_wimwv_true = create_wimwv_true(twa, self.tws)
                         nmea_wimwv_apparent = create_wimwv_apparent(awa, aws)
                         full_nmea_packet += nmea_wimwd + nmea_wimwv_true + nmea_wimwv_apparent
+
+                    # Update last status for API consumers
+                    self._last_status = {
+                        "gnss": {
+                            "sats_in_view": sats_in_view,
+                            "sats_used": sats_used_count,
+                            "pdop": pdop,
+                            "hdop": hdop,
+                            "vdop": vdop,
+                            "satellites": satellites,
+                        }
+                    }
 
                 # Send outside the lock
                 self._sock.sendto(full_nmea_packet.encode('ascii'), (self.host, self.port))

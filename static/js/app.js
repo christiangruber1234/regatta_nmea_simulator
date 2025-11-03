@@ -32,19 +32,52 @@ themeToggle.addEventListener('change', () => {
   html.setAttribute('data-theme', t);
   localStorage.setItem('theme', t);
   updateThemeLabel();
+  // Switch map tiles to match theme
+  map.removeLayer(currentTiles);
+  currentTiles = (t === 'dark') ? darkTiles : lightTiles;
+  currentTiles.addTo(map);
 });
 
 function updateThemeLabel(){
   themeLabel.textContent = themeToggle.checked ? 'Night' : 'Day';
 }
 
+// Set default Start Date & Time (UTC) on load if empty
+function pad2(n){ return String(n).padStart(2, '0'); }
+function setDefaultStartUTC(){
+  if (!startDtEl.value) {
+    const now = new Date();
+    const y = now.getUTCFullYear();
+    const m = pad2(now.getUTCMonth() + 1);
+    const d = pad2(now.getUTCDate());
+    const hh = pad2(now.getUTCHours());
+    const mm = pad2(now.getUTCMinutes());
+    // datetime-local expects YYYY-MM-DDTHH:MM
+    startDtEl.value = `${y}-${m}-${d}T${hh}:${mm}`;
+  }
+}
+setDefaultStartUTC();
+
 // Leaflet map
 const map = L.map('map').setView([parseFloat(latEl.value), parseFloat(lonEl.value)], 10);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+
+// Define light and dark tile layers
+const lightTiles = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   maxZoom: 19,
   attribution: '&copy; OpenStreetMap contributors'
-}).addTo(map);
+});
+
+// CARTO Dark Matter (note: third-party terms may apply)
+const darkTiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+  maxZoom: 19,
+  attribution: '&copy; OpenStreetMap contributors, &copy; CARTO'
+});
+
+let currentTiles = (savedTheme === 'dark') ? darkTiles : lightTiles;
+currentTiles.addTo(map);
+
 let marker = L.marker([parseFloat(latEl.value), parseFloat(lonEl.value)], {draggable: true}).addTo(map);
+let currentMarker = null; // simulator current position when running
 
 function syncInputsFromMarker(){
   const {lat, lng} = marker.getLatLng();
@@ -72,6 +105,20 @@ async function refreshStatus(){
     statusText.textContent = running ? `Status: Running (lat=${(data.lat||0).toFixed?.(4)}, lon=${(data.lon||0).toFixed?.(4)}, port=${data.port})` : 'Status: Stopped';
     startBtn.disabled = running;
     stopBtn.disabled = !running;
+    // Update current position marker on map when running
+    if (running && typeof data.lat === 'number' && typeof data.lon === 'number') {
+      const latLng = [data.lat, data.lon];
+      if (!currentMarker) {
+        currentMarker = L.circleMarker(latLng, { radius: 6, color: '#ff3860', fillColor: '#ff3860', fillOpacity: 0.9 }).addTo(map);
+      } else {
+        currentMarker.setLatLng(latLng);
+      }
+    } else {
+      if (currentMarker) {
+        map.removeLayer(currentMarker);
+        currentMarker = null;
+      }
+    }
   } catch (e) {
     statusText.textContent = 'Status: Unknown';
   }

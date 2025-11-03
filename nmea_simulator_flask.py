@@ -16,7 +16,7 @@ def get_simulator() -> Optional[NMEASimulator]:
     return simulator
 
 
-def set_simulator(sim: NMEASimulator | None) -> None:
+def set_simulator(sim: Optional[NMEASimulator]) -> None:
     global simulator
     simulator = sim
 
@@ -24,6 +24,11 @@ def set_simulator(sim: NMEASimulator | None) -> None:
 @app.route("/")
 def index():
     return render_template("index.html")
+
+
+@app.route("/data")
+def data_page():
+    return render_template("data.html")
 
 
 @app.route("/api/status", methods=["GET"]) 
