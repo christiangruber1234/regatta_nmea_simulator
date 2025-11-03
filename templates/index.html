@@ -21,31 +21,27 @@
 
     <main class="container">
       <section class="controls card">
+        <h2 style="margin: 0 0 8px 0;">Network</h2>
         <div class="grid">
           <div>
             <label>Target Host</label>
             <input id="host" type="text" value="127.0.0.1" />
           </div>
           <div>
-            <label>Target Port</label>
+            <label>Target Port (UDP)</label>
             <input id="port" type="number" value="10110" min="1" max="65535" />
-          </div>
-          <div>
-            <label>Interval (s)</label>
-            <input id="interval" type="number" value="1.0" min="0.1" step="0.1" />
-          </div>
-          <div>
-            <label>Wind Enabled</label>
-            <select id="wind_enabled">
-              <option value="false">No</option>
-              <option value="true" selected>Yes</option>
-            </select>
           </div>
           <div>
             <label>TCP Port</label>
             <input id="tcp_port" type="number" value="10110" min="1" max="65535" />
           </div>
+          <div>
+            <label>Interval (s)</label>
+            <input id="interval" type="number" value="1.0" min="0.1" step="0.1" />
+          </div>
         </div>
+
+        <h2 style="margin: 16px 0 8px 0;">Initial parameters</h2>
         <div class="grid">
           <div>
             <label>Start Latitude</label>
@@ -60,6 +56,7 @@
             <input id="start_datetime" type="datetime-local" />
           </div>
         </div>
+
         <div class="grid">
           <div>
             <label>Initial SOG (kn)</label>
@@ -82,6 +79,18 @@
             <input id="magvar" type="number" value="-2.5" step="0.1" />
           </div>
         </div>
+
+        <h2 style="margin: 16px 0 8px 0;">Wind</h2>
+        <div class="grid">
+          <div>
+            <label>Wind Enabled</label>
+            <select id="wind_enabled">
+              <option value="false">No</option>
+              <option value="true" selected>Yes</option>
+            </select>
+          </div>
+        </div>
+
         <div class="buttons">
           <button id="startBtn" class="primary">Start</button>
           <button id="stopBtn">Stop</button>
