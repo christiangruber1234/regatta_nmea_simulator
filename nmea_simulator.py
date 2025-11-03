@@ -513,10 +513,10 @@ class NMEASimulator:
                         self.sim_time = self.sim_time + timedelta(seconds=self.interval)
 
                     # Update simulated kinematics or follow GPX track
+                    dt_hours = self.interval / 3600.0
                     if self._gpx_track and (self._gpx_start_time is not None):
                         self._update_from_gpx(current_utc_time)
                     else:
-                        dt_hours = self.interval / 3600.0
                         dist_nm = self.sog * dt_hours
 
                         rad_lat = math.radians(self.lat)
@@ -905,8 +905,9 @@ class NMEASimulator:
             frac = min(1.0, max(0.0, (tnow - t0).total_seconds() / span))
             self.lat = prev["lat"] + (nxt["lat"] - prev["lat"]) * frac
             self.lon = prev["lon"] + (nxt["lon"] - prev["lon"]) * frac
-            dist_nm = self._haversine_nm(prev["lat"], prev["lon"], nxt["lat"], nxt["lon"]) * frac
-            self.sog = max(0.0, (dist_nm / (span / 3600.0)))
+            seg_nm = self._haversine_nm(prev["lat"], prev["lon"], nxt["lat"], nxt["lon"])  # full segment dist
+            # Use segment average speed (constant across segment) for more natural AIS behavior
+            self.sog = max(0.0, (seg_nm / (span / 3600.0)))
             self.cog = self._bearing_deg(prev["lat"], prev["lon"], nxt["lat"], nxt["lon"]) % 360
         else:
             # No timestamps: advance along the polyline at current SOG
