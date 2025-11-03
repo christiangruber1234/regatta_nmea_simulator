@@ -15,6 +15,16 @@
       .header-links { display: flex; gap: 12px; align-items: center; }
       .header-links a { color: var(--text-color); text-decoration: none; border: 1px solid var(--border-color); padding: 6px 10px; border-radius: 6px; }
       .header-links a:hover { background: var(--hover-bg); }
+      /* Console-style stream */
+      .stream-box {
+        background: #000 !important;
+        color: #00ff6a;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        line-height: 1.35;
+        border: 1px solid #0a0;
+        border-radius: 8px;
+        padding: 12px;
+      }
     </style>
   </head>
   <body>
@@ -76,7 +86,7 @@
       <section class="card">
         <h2>Data Stream</h2>
         <p class="muted">Last 200 lines generated (NMEA and AIS).</p>
-        <pre id="streamBox" style="max-height: 320px; overflow: auto; white-space: pre-wrap;"></pre>
+  <pre id="streamBox" class="stream-box" style="max-height: 320px; overflow: auto; white-space: pre-wrap;"></pre>
       </section>
     </main>
 
