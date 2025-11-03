@@ -6,6 +6,8 @@
   --card: #f8fafc;
   --border: #e5e7eb;
   --primary: #2563eb;
+  --header-bg: rgba(255,255,255,0.7);
+  --header-h: 56px;
 }
 
 html[data-theme="dark"] {
@@ -15,11 +17,16 @@ html[data-theme="dark"] {
   --card: #0f172a;
   --border: #1f2937;
   --primary: #60a5fa;
+  --header-bg: rgba(11,18,32,0.55);
 }
 
 body { background: var(--bg); color: var(--fg); font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial, Apple Color Emoji, Segoe UI Emoji; }
+.app-header { display:flex; align-items:center; justify-content:space-between; padding: 1rem 1.25rem; border-bottom: 1px solid var(--border); position: fixed; top:0; left:0; right:0; z-index: 2000; background: var(--header-bg); backdrop-filter: saturate(180%) blur(8px); -webkit-backdrop-filter: saturate(180%) blur(8px); }
+.app-header::after { content:""; position:absolute; left:0; right:0; bottom:-1px; height:1px; background: var(--border); opacity: 0.9; }
+.app-header h1 { line-height: 1; }
 
-.app-header { display:flex; align-items:center; justify-content:space-between; padding: 1rem 1.25rem; border-bottom: 1px solid var(--border); position: sticky; top:0; backdrop-filter: blur(8px); }
+/* Make content scroll under header */
+body { padding-top: var(--header-h); }
 .app-header h1 { font-size: 1.25rem; margin:0; }
 
 .app-nav { margin-left:auto; display:flex; gap: 8px; align-items:center; }
@@ -72,6 +79,8 @@ button:disabled { opacity: 0.6; cursor:not-allowed; }
 /* Improve map background to avoid flashes between tile loads, and match themes */
 .leaflet-container { background: var(--card); }
 html[data-theme="dark"] .leaflet-container { background: #0b1220; }
+/* Ensure maps stay below the fixed header visually */
+.leaflet-container { position: relative; z-index: 0; }
 
 /* (old switch styles removed in favor of icon button) */
 
@@ -79,6 +88,7 @@ html[data-theme="dark"] .leaflet-container { background: #0b1220; }
 
 /* Toggle switch for Mode */
 .switch-row { display:flex; align-items:center; gap: 10px; }
+.section-header { display:flex; align-items:center; justify-content: space-between; gap: 12px; }
 .switch { position: relative; display: inline-block; width: 48px; height: 26px; }
 .switch input { opacity: 0; width: 0; height: 0; }
 .switch .slider {

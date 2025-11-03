@@ -25,11 +25,25 @@ const initModeToggle = document.getElementById('init_mode_toggle');
 const initModeEl = document.getElementById('init_mode'); // legacy select if present
 const gpxFileEl = document.getElementById('gpx_file');
 const gpxMetaEl = document.getElementById('gpxMeta');
+const gpxFilenameBar = document.getElementById('gpxFilenameBar');
 const manualParams = document.getElementById('manual_params');
 const gpxParams = document.getElementById('gpx_params');
 const intervalGpxEl = document.getElementById('interval_gpx');
 let currentGpxId = null;
 let gpxPolyline = null;
+function fitGpxBounds(){
+  try{
+    if (gpxPolyline){
+      const b = gpxPolyline.getBounds();
+      if (b && b.isValid()){
+        map.fitBounds(b, { padding: [20,20] });
+      }
+    } else if (currentGpxMeta && Array.isArray(currentGpxMeta.path) && currentGpxMeta.path.length > 1){
+      const b = L.latLngBounds(currentGpxMeta.path.map(p => [p[0], p[1]]));
+      map.fitBounds(b, { padding: [20,20] });
+    }
+  }catch(e){ /* ignore */ }
+}
 let currentGpxMeta = null;
 let gpxSliderEl = document.getElementById('gpx_slider');
 let gpxCursorLabel = document.getElementById('gpxCursorLabel');
@@ -129,6 +143,8 @@ function updateInitModeUI(){
   if (mode === 'gpx'){
     if (manualParams) manualParams.style.display = 'none';
     if (gpxParams) gpxParams.style.display = '';
+    // When switching into GPX mode, zoom to full track if available
+    fitGpxBounds();
   }else{
     if (manualParams) manualParams.style.display = '';
     if (gpxParams) gpxParams.style.display = 'none';
@@ -151,6 +167,8 @@ async function uploadGpx(file){
   // Persist GPX selection and meta for page reloads
   try { localStorage.setItem('gpx.currentId', currentGpxId); } catch(e){}
   try { localStorage.setItem('gpx.currentMeta', JSON.stringify(currentGpxMeta)); } catch(e){}
+  try { localStorage.setItem('gpx.filename', g.filename || ''); } catch(e){}
+  if (gpxFilenameBar){ gpxFilenameBar.textContent = g.filename ? `File: ${g.filename}` : 'File: (unnamed)'; }
   if (gpxMetaEl){
     const dur = (g.duration_s != null) ? `${Math.floor(g.duration_s/3600)}h ${Math.floor((g.duration_s%3600)/60)}m ${g.duration_s%60}s` : 'n/a';
     gpxMetaEl.innerHTML = `
@@ -180,8 +198,7 @@ async function uploadGpx(file){
     if (gpxPolyline){ map.removeLayer(gpxPolyline); gpxPolyline = null; }
     if (Array.isArray(g.path) && g.path.length > 1){
       gpxPolyline = L.polyline(g.path.map(p => [p[0], p[1]]), { color: '#22d3ee', weight: 3, opacity: 0.8 }).addTo(map);
-      const b = L.latLngBounds(g.path.map(p => [p[0], p[1]]));
-      map.fitBounds(b, { padding: [20,20] });
+      fitGpxBounds();
       // Move the draggable marker to the start point for context
       const [slat, slon] = g.path[0];
       marker.setLatLng([slat, slon]);
@@ -270,9 +287,11 @@ function restorePersisted(){
   if (savedMode){ setInitMode(savedMode); updateInitModeUI(); }
     const savedMeta = localStorage.getItem('gpx.currentMeta');
     const savedId = localStorage.getItem('gpx.currentId');
+    const savedFilename = localStorage.getItem('gpx.filename');
     if (savedMeta){
       const g = JSON.parse(savedMeta);
       currentGpxMeta = g; currentGpxId = savedId || g.id;
+      if (gpxFilenameBar){ gpxFilenameBar.textContent = savedFilename ? `File: ${savedFilename}` : 'No GPX selected.'; }
       // Render meta block
       if (gpxMetaEl){
         const dur = (g.duration_s != null) ? `${Math.floor(g.duration_s/3600)}h ${Math.floor((g.duration_s%3600)/60)}m ${g.duration_s%60}s` : 'n/a';
@@ -291,8 +310,7 @@ function restorePersisted(){
       if (gpxPolyline){ map.removeLayer(gpxPolyline); gpxPolyline = null; }
       if (Array.isArray(g.path) && g.path.length > 1){
         gpxPolyline = L.polyline(g.path.map(p => [p[0], p[1]]), { color: '#22d3ee', weight: 3, opacity: 0.8 }).addTo(map);
-        const b = L.latLngBounds(g.path.map(p => [p[0], p[1]]));
-        map.fitBounds(b, { padding: [20,20] });
+        fitGpxBounds();
       }
       if (gpxSliderEl){
         if (g.has_time && typeof g.duration_s === 'number'){

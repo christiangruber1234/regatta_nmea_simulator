@@ -379,10 +379,28 @@ def api_upload_gpx():
             timeline = None
 
     gpx_id = str(uuid.uuid4())
+    # Save raw file server-side under uploads/gpx
+    try:
+        base_dir = os.path.dirname(__file__)
+        upload_dir = os.path.join(base_dir, 'uploads', 'gpx')
+        os.makedirs(upload_dir, exist_ok=True)
+        orig_name = (getattr(f, 'filename', '') or 'track.gpx')
+        # sanitize filename (simple)
+        safe = ''.join(ch if ch.isalnum() or ch in ('-', '_', '.', ' ') else '_' for ch in orig_name).strip()
+        if not safe.lower().endswith('.gpx'):
+            safe = (safe or 'track') + '.gpx'
+        save_name = f"{gpx_id}_{safe}"
+        save_path = os.path.join(upload_dir, save_name)
+        with open(save_path, 'wb') as out:
+            out.write(content)
+        saved_relpath = os.path.relpath(save_path, base_dir)
+    except Exception:
+        saved_relpath = None
     # Serialize times to ISO for storage meta; keep datetime objects in points for the simulator
     meta = {
         "id": gpx_id,
         "filename": getattr(f, 'filename', None),
+        "saved_path": saved_relpath,
         "points_count": len(pts),
         "length_nm": round(length_nm, 3),
         "has_time": bool(has_time),

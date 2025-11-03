@@ -128,6 +128,23 @@
 
       let ownMarker = null;
       let aisMarkers = new Map(); // mmsi -> marker
+      let autoFitDone = false;
+      let userMoved = false;
+      map.on('movestart', () => { userMoved = true; });
+
+      function fitAllAis(){
+        try{
+          const pts = [];
+          if (ownMarker){ const ll = ownMarker.getLatLng(); if(ll) pts.push(ll); }
+          for(const [,m] of aisMarkers){ const ll = m.getLatLng(); if(ll) pts.push(ll); }
+          if (pts.length >= 1){
+            const b = L.latLngBounds(pts);
+            if (b.isValid()){
+              map.fitBounds(b, { padding: [20,20] });
+            }
+          }
+        }catch(e){ /* ignore */ }
+      }
 
       function updateMarkers(status){
         if (typeof status.lat === 'number' && typeof status.lon === 'number'){
@@ -154,6 +171,14 @@
         for(const [k, m] of aisMarkers){ if(!seen.has(k)){ map.removeLayer(m); aisMarkers.delete(k); } }
 
         renderAisTable(ais);
+        // Auto-fit once after first data if user has not moved the map
+        if (!autoFitDone && !userMoved){
+          const total = ((status.ais || {}).targets || []).length + (ownMarker ? 1 : 0);
+          if (total > 0){
+            fitAllAis();
+            autoFitDone = true;
+          }
+        }
       }
 
       function renderAisTable(list){
