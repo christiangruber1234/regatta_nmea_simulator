@@ -69,6 +69,10 @@ button:disabled { opacity: 0.6; cursor:not-allowed; }
 .map.card { display:flex; flex-direction: column; }
 .map-canvas { flex: 1 1 auto; height: 70vh; min-height: 360px; border-radius: 8px; border: 1px solid var(--border); }
 
+/* Improve map background to avoid flashes between tile loads, and match themes */
+.leaflet-container { background: var(--card); }
+html[data-theme="dark"] .leaflet-container { background: #0b1220; }
+
 /* (old switch styles removed in favor of icon button) */
 
 .muted { color: var(--muted); font-size: 0.85rem; }

@@ -1,4 +1,5 @@
 from flask import Flask, render_template, request, jsonify
+import os
 from datetime import datetime, timezone
 from threading import Lock
 from typing import Optional
@@ -143,5 +144,6 @@ def api_restart():
 
 
 if __name__ == "__main__":
-    # For development use only
-    app.run(host="0.0.0.0", port=5080, debug=True)
+    # For development use only; allow overriding port via env for local conflicts
+    port = int(os.environ.get("PORT", 5080))
+    app.run(host="0.0.0.0", port=port, debug=True)
