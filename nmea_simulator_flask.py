@@ -74,6 +74,7 @@ def api_start():
         params = dict(
             host=data.get("host", "127.0.0.1"),
             port=int(data.get("port", 10110)),
+            tcp_port=int(data.get("tcp_port", 10110)),
             interval=float(data.get("interval", 1.0)),
             wind_enabled=bool(data.get("wind_enabled", True)),
             start_lat=float(data.get("lat", 47.0707)),

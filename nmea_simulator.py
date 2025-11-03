@@ -40,6 +40,7 @@ DEFAULT_COG = 185.0     # Course Over Ground in degrees True
 DEFAULT_TWS = 10.0      # True Wind Speed in knots
 DEFAULT_TWD = 270.0     # True Wind Direction in degrees True (from North)
 DEFAULT_MAGVAR = -2.5   # Magnetic variation, degrees West (-) or East (+)
+DEFAULT_TCP_PORT = 10110 # Default TCP server port for NMEA stream
 
 # --- Helper Functions ---
 
@@ -331,6 +332,7 @@ class NMEASimulator:
         ais_max_cog_offset: float = 20.0,
         ais_max_sog_offset: float = 2.0,
         ais_distribution_radius_nm: float = 1.0,
+        tcp_port: Optional[int] = DEFAULT_TCP_PORT,
     ) -> None:
         self.host = host
         self.port = int(port)
@@ -362,9 +364,13 @@ class NMEASimulator:
         self._sock: Optional[socket.socket] = None
         self._last_status = {}
         # Stream buffer of recent lines
-        self._stream: Deque[str] = deque(maxlen=200)
+        self._stream = deque(maxlen=200)
         # Last minute when Type 24 static messages were emitted
         self._last_ais24_minute = None
+        # TCP server state
+        self.tcp_port = int(tcp_port) if tcp_port else None
+        self._tcp_server_sock = None
+        self._tcp_clients = []  # each: {sock, addr, port, connected_at}
 
     def is_running(self) -> bool:
         return self._thread is not None and self._thread.is_alive()
@@ -404,6 +410,7 @@ class NMEASimulator:
                 "running": self.is_running(),
                 "host": self.host,
                 "port": self.port,
+                "tcp_port": self.tcp_port,
                 "interval": self.interval,
                 "wind_enabled": self.wind_enabled,
                 "lat": self.lat,
@@ -417,16 +424,47 @@ class NMEASimulator:
                 "gnss": self._last_status.get("gnss") if isinstance(self._last_status, dict) else None,
                 "ais": self._last_status.get("ais") if isinstance(self._last_status, dict) else None,
                 "stream_size": len(self._stream),
+                "tcp_clients": self._tcp_clients_summary() if self.tcp_port else [],
             }
         return st
 
     # Internal helpers
     def _run_loop(self) -> None:
         self._sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        # Initialize TCP server if requested
+        if self.tcp_port:
+            try:
+                srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                srv.bind(("0.0.0.0", int(self.tcp_port)))
+                srv.listen(8)
+                srv.setblocking(False)
+                self._tcp_server_sock = srv
+                print(f"TCP server listening on 0.0.0.0:{self.tcp_port}")
+            except Exception as e:
+                print(f"**ERR: Failed to start TCP server on {self.tcp_port}: {e}")
+                self._tcp_server_sock = None
         print(f"NMEA Simulator started. Sending data to {self.host}:{self.port} every {self.interval}s.")
         try:
             while not self._stop_event.is_set():
                 with self._lock:
+                    # Accept new TCP clients (non-blocking)
+                    if self._tcp_server_sock is not None:
+                        while True:
+                            try:
+                                csock, caddr = self._tcp_server_sock.accept()
+                                csock.setblocking(False)
+                                self._tcp_clients.append({
+                                    "sock": csock,
+                                    "addr": caddr[0],
+                                    "port": caddr[1],
+                                    "connected_at": datetime.utcnow().isoformat() + "Z",
+                                })
+                                print(f"TCP client connected: {caddr[0]}:{caddr[1]}")
+                            except (BlockingIOError, InterruptedError):
+                                break
+                            except Exception:
+                                break
                     # Simulation time: use provided start time and advance, else real UTC
                     if self.sim_time is None:
                         current_utc_time = datetime.utcnow().replace(tzinfo=timezone.utc)
@@ -543,6 +581,29 @@ class NMEASimulator:
 
                 # Send outside the lock
                 self._sock.sendto(full_nmea_packet.encode('ascii'), (self.host, self.port))
+                # Broadcast to TCP clients
+                if self._tcp_clients:
+                    dead = []
+                    data = full_nmea_packet.encode('ascii')
+                    for c in list(self._tcp_clients):
+                        s = c.get("sock")
+                        try:
+                            if s:
+                                s.sendall(data)
+                        except Exception:
+                            dead.append(c)
+                    # Remove dead clients
+                    if dead:
+                        for c in dead:
+                            try:
+                                if c.get("sock"):
+                                    c["sock"].close()
+                            except Exception:
+                                pass
+                            try:
+                                self._tcp_clients.remove(c)
+                            except Exception:
+                                pass
 
                 # Append to stream buffer (split into lines and ignore empties)
                 for line in full_nmea_packet.splitlines():
@@ -568,6 +629,20 @@ class NMEASimulator:
             try:
                 if self._sock:
                     self._sock.close()
+                if self._tcp_server_sock:
+                    try:
+                        self._tcp_server_sock.close()
+                    except Exception:
+                        pass
+                    self._tcp_server_sock = None
+                # Close all client sockets
+                for c in list(self._tcp_clients):
+                    try:
+                        if c.get("sock"):
+                            c["sock"].close()
+                    except Exception:
+                        pass
+                self._tcp_clients.clear()
             finally:
                 self._sock = None
                 print("Simulator socket closed.")
@@ -671,6 +746,15 @@ class NMEASimulator:
         fn = first_names[(idx * 7 + 3) % len(first_names)]
         ln = last_names[(idx * 11 + 5) % len(last_names)]
         return f"{fn} {ln}"
+
+    def _tcp_clients_summary(self) -> List[Dict[str, str]]:
+        out = []
+        for c in self._tcp_clients:
+            out.append({
+                "address": f"{c.get('addr')}:{c.get('port')}",
+                "connected_at": c.get("connected_at", "")
+            })
+        return out
 
 
 def run_simulator(host, port, interval, **kwargs):
