@@ -58,7 +58,7 @@ pip install -r requirements.txt
 python nmea_simulator_flask.py
 ```
 
-Then open http://localhost:5000 in your browser.
+Then open http://localhost:5080 in your browser.
 
 ## Project layout
 
