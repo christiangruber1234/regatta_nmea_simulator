@@ -11,7 +11,8 @@ Fork note: This project was originally created by Christian Heiling and forked f
   - Wind (optional): WIMWD, WIMWV (True and Apparent)
   - AIS: !AIVDM Type 18 (Class B position) and Type 24 Part A (static data)
   - Heading (optional): HCHDT (true heading derived from COG when enabled)
-- Realistic simulation: SOG, COG, wind speed/direction and position evolve over time
+  - Sensors (optional): Depth (SDDBT, SDDPT), Water Temperature (WIMTW), Battery Voltage (IIXDR), Air Temperature (IIXDR), Tank Levels (IIXDR)
+- Realistic simulation: SOG, COG, wind speed/direction, position, and sensor values evolve over time
 - AIS targets: configurable count, random spatial distribution, speed/course offsets
 - Built-in TCP server to stream the same NMEA payload to multiple clients
 - GPX track mode
@@ -86,6 +87,12 @@ Pages (templates in `templates/`):
     - Toggle On/Off; shows/hides TWS/TWD inputs
   - Heading
     - Toggle to emit `$HCHDT` (true heading) computed from current COG
+  - Sensors (optional)
+    - Depth: Toggle to emit `$SDDBT` (feet/meters/fathoms) and `$SDDPT` (meters with offset); configurable depth and offset
+    - Water Temperature: Toggle to emit `$WIMTW`; configurable temperature (°C)
+    - Battery Voltage: Toggle to emit `$IIXDR` (voltage transducer); configurable voltage (V)
+    - Air Temperature: Toggle to emit `$IIXDR` (temperature transducer); configurable temperature (°C)
+    - Tank Levels: Toggle to emit `$IIXDR` (volume percent transducers) for FreshWater, Fuel, and WasteWater tanks; configurable levels (%)
   - Map
     - Click/drag to set starting position (manual mode); theme-aware tiles; OpenSeaMap seamarks overlay
 
@@ -116,8 +123,9 @@ Notes:
 All endpoints return/consume JSON.
 
 - GET `/api/status`
-  - Returns: `{ running, host, port, tcp_port, tcp_host, interval, wind_enabled, heading_enabled, lat, lon, sog, cog, tws, twd, magvar, sim_time, started_at, gnss, ais, stream_size, tcp_clients, gpx_track_info }`
+  - Returns: `{ running, host, port, tcp_port, tcp_host, interval, wind_enabled, heading_enabled, depth_enabled, water_temp_enabled, battery_enabled, air_temp_enabled, tanks_enabled, lat, lon, sog, cog, tws, twd, magvar, depth_m, water_temp_c, battery_v, air_temp_c, tank_fresh_water, tank_fuel, tank_waste, sim_time, started_at, gnss, ais, stream_size, tcp_clients, gpx_track_info }`
   - `started_at` is an ISO8601 timestamp used for the running timer
+  - Sensor values (`depth_m`, `water_temp_c`, `battery_v`, `air_temp_c`, `tank_fresh_water`, `tank_fuel`, `tank_waste`) reflect current simulated state
   - `gpx_track_info` includes `{ points, start_time, end_time, duration_s, has_time, progress }`, where `progress` is `{ mode: 'time', offset_s }` or `{ mode: 'index', fraction }`
 
 - GET `/api/stream?limit=100`
@@ -133,6 +141,12 @@ All endpoints return/consume JSON.
     - Navigation: `sog`, `cog`, `magvar`
   - Wind: `wind_enabled` (bool), `tws`, `twd`
   - Heading: `heading_enabled` (bool) to add HDT sentence derived from COG
+  - Sensors:
+    - Depth: `depth_enabled` (bool), `depth_m` (depth in meters), `depth_offset_m` (transducer offset)
+    - Water Temp: `water_temp_enabled` (bool), `water_temp_c` (temperature in °C)
+    - Battery: `battery_enabled` (bool), `battery_v` (voltage in volts)
+    - Air Temp: `air_temp_enabled` (bool), `air_temp_c` (temperature in °C)
+    - Tanks: `tanks_enabled` (bool), `tank_fresh_water` (%), `tank_fuel` (%), `tank_waste` (%)
     - AIS: `ais_num_targets`, `ais_max_cog_offset`, `ais_max_sog_offset`, `ais_distribution_radius_nm`
     - GPX: `gpx_id` (from upload), and one of:
       - `gpx_offset_s` (start at GPX start time + offset seconds)
@@ -167,6 +181,11 @@ NMEASimulator(
   interval=1.0,
   wind_enabled=True,
   heading_enabled=False,
+  depth_enabled=False, depth_m=12.0, depth_offset_m=0.3,
+  water_temp_enabled=False, water_temp_c=18.0,
+  battery_enabled=False, battery_v=12.5,
+  air_temp_enabled=False, air_temp_c=20.0,
+  tanks_enabled=False, tank_fresh_water=80.0, tank_fuel=60.0, tank_waste=15.0,
   start_lat=..., start_lon=...,
   sog_knots=5.0, cog_degrees=185.0,
   tws_knots=10.0, twd_degrees=270.0,
@@ -194,6 +213,12 @@ Outputs each tick:
 - GNSS/NMEA: GPRMC, GPGGA, GPVTG, GPGSA, GPGSV
 - Wind (when enabled): WIMWD, WIMWV (True + Apparent)
 - Heading (when enabled): HCHDT (True heading)
+- Sensors (when enabled):
+  - Depth: SDDBT (feet/meters/fathoms), SDDPT (meters with offset)
+  - Water Temperature: WIMTW (°C)
+  - Battery Voltage: IIXDR (voltage transducer U)
+  - Air Temperature: IIXDR (temperature transducer C)
+  - Tank Levels: IIXDR (volume percent transducer V) for FreshWater, Fuel, WasteWater
 - AIS (when configured): !AIVDM Type 18, and periodic Type 24 Part A
 
 ## Map tiles and night mode

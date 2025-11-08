@@ -43,6 +43,16 @@ DEFAULT_TWD = 270.0     # True Wind Direction in degrees True (from North)
 DEFAULT_MAGVAR = -2.5   # Magnetic variation, degrees West (-) or East (+)
 DEFAULT_TCP_PORT = 10111 # Default TCP server port for NMEA stream
 
+# Sensor defaults
+DEFAULT_DEPTH_M = 12.0   # Water depth in meters
+DEFAULT_DEPTH_OFFSET_M = 0.3  # Transducer offset in meters
+DEFAULT_WATER_TEMP_C = 18.0   # Water temperature in Celsius
+DEFAULT_BATTERY_V = 12.7      # Battery voltage
+DEFAULT_AIR_TEMP_C = 23.0     # Air temperature in Celsius
+DEFAULT_TANK_FRESH_WATER = 75.0   # Fresh water tank level %
+DEFAULT_TANK_FUEL = 60.0          # Fuel tank level %
+DEFAULT_TANK_WASTE = 30.0         # Waste tank level %
+
 # --- Helper Functions ---
 
 def calculate_nmea_checksum(sentence_body: str) -> str:
@@ -182,6 +192,71 @@ def create_hchdt(heading_true_deg: float) -> str:
     h = (heading_true_deg % 360.0)
     h_str = f"{h:.1f}"
     body = f"HCHDT,{h_str},T"
+    checksum = calculate_nmea_checksum(body)
+    return f"${body}*{checksum}\r\n"
+
+# --- Depth NMEA ---
+def create_sddpt(depth_m: float, offset_m: float = 0.0) -> str:
+    """Creates a SDDPT sentence (Depth).
+    $SDDPT,depth_m,offset_m,max_range*CS
+    Example: $SDDPT,12.4,0.3,*7F
+    """
+    d_str = f"{depth_m:.1f}"
+    o_str = f"{offset_m:.1f}"
+    body = f"SDDPT,{d_str},{o_str},"
+    checksum = calculate_nmea_checksum(body)
+    return f"${body}*{checksum}\r\n"
+
+def create_sddbt(depth_m: float) -> str:
+    """Creates a SDDBT sentence (Depth Below Transducer).
+    $SDDBT,depth_ft,f,depth_m,M,depth_fathoms,F*CS
+    """
+    depth_ft = depth_m * 3.28084
+    depth_fathoms = depth_m * 0.546807
+    body = f"SDDBT,{depth_ft:.1f},f,{depth_m:.1f},M,{depth_fathoms:.1f},F"
+    checksum = calculate_nmea_checksum(body)
+    return f"${body}*{checksum}\r\n"
+
+# --- Water Temperature NMEA ---
+def create_wimtw(temp_c: float) -> str:
+    """Creates a WIMTW sentence (Water Temperature).
+    $WIMTW,temp,C*CS
+    Example: $WIMTW,18.7,C*1F
+    """
+    t_str = f"{temp_c:.1f}"
+    body = f"WIMTW,{t_str},C"
+    checksum = calculate_nmea_checksum(body)
+    return f"${body}*{checksum}\r\n"
+
+# --- XDR Transducer Measurements ---
+def create_xdr_battery(voltage_v: float) -> str:
+    """Creates an XDR sentence for battery voltage.
+    $IIXDR,U,voltage,V,DC_BATT*CS
+    Example: $IIXDR,U,12.7,V,DC_BATT*xx
+    """
+    v_str = f"{voltage_v:.1f}"
+    body = f"IIXDR,U,{v_str},V,DC_BATT"
+    checksum = calculate_nmea_checksum(body)
+    return f"${body}*{checksum}\r\n"
+
+def create_xdr_air_temp(temp_c: float) -> str:
+    """Creates an XDR sentence for air temperature.
+    $IIXDR,C,temp,C,AirTemp*CS
+    Example: $IIXDR,C,23.4,C,AirTemp*xx
+    """
+    t_str = f"{temp_c:.1f}"
+    body = f"IIXDR,C,{t_str},C,AirTemp"
+    checksum = calculate_nmea_checksum(body)
+    return f"${body}*{checksum}\r\n"
+
+def create_xdr_tank(level_percent: float, tank_name: str) -> str:
+    """Creates an XDR sentence for tank level.
+    $IIXDR,V,level_percent,P,tank_name*CS
+    Example: $IIXDR,V,75.0,P,FreshWater*xx
+    V = Volume (percent)
+    """
+    l_str = f"{level_percent:.1f}"
+    body = f"IIXDR,V,{l_str},P,{tank_name}"
     checksum = calculate_nmea_checksum(body)
     return f"${body}*{checksum}\r\n"
 
@@ -333,6 +408,11 @@ class NMEASimulator:
         interval: float = SEND_INTERVAL,
         wind_enabled: bool = WIND_INSTRUMENTS_ENABLED,
         heading_enabled: bool = False,
+        depth_enabled: bool = False,
+        water_temp_enabled: bool = False,
+        battery_enabled: bool = False,
+        air_temp_enabled: bool = False,
+        tanks_enabled: bool = False,
         start_lat: float = DEFAULT_LAT,
         start_lon: float = DEFAULT_LON,
         sog_knots: float = DEFAULT_SOG,
@@ -340,6 +420,14 @@ class NMEASimulator:
         tws_knots: float = DEFAULT_TWS,
         twd_degrees: float = DEFAULT_TWD,
         mag_variation: float = DEFAULT_MAGVAR,
+        depth_m: float = DEFAULT_DEPTH_M,
+        depth_offset_m: float = DEFAULT_DEPTH_OFFSET_M,
+        water_temp_c: float = DEFAULT_WATER_TEMP_C,
+        battery_v: float = DEFAULT_BATTERY_V,
+        air_temp_c: float = DEFAULT_AIR_TEMP_C,
+        tank_fresh_water: float = DEFAULT_TANK_FRESH_WATER,
+        tank_fuel: float = DEFAULT_TANK_FUEL,
+        tank_waste: float = DEFAULT_TANK_WASTE,
         start_datetime: Optional[datetime] = None,
         ais_num_targets: int = 0,
         ais_max_cog_offset: float = 20.0,
@@ -364,6 +452,22 @@ class NMEASimulator:
         self.twd = float(twd_degrees) % 360
         self.magvar = float(mag_variation)
         self.sim_time = start_datetime.replace(tzinfo=timezone.utc) if start_datetime else None
+        
+        # Sensor state
+        self.depth_enabled = bool(depth_enabled)
+        self.depth_m = float(depth_m)
+        self.depth_offset_m = float(depth_offset_m)
+        self.water_temp_enabled = bool(water_temp_enabled)
+        self.water_temp_c = float(water_temp_c)
+        self.battery_enabled = bool(battery_enabled)
+        self.battery_v = float(battery_v)
+        self.air_temp_enabled = bool(air_temp_enabled)
+        self.air_temp_c = float(air_temp_c)
+        self.tanks_enabled = bool(tanks_enabled)
+        self.tank_fresh_water = float(tank_fresh_water)
+        self.tank_fuel = float(tank_fuel)
+        self.tank_waste = float(tank_waste)
+        
         # GPX playback
         self._gpx_track = self._prepare_gpx(gpx_track)
         self._gpx_duration_s = None
@@ -496,6 +600,11 @@ class NMEASimulator:
                 "interval": self.interval,
                 "wind_enabled": self.wind_enabled,
                 "heading_enabled": getattr(self, "heading_enabled", False),
+                "depth_enabled": getattr(self, "depth_enabled", False),
+                "water_temp_enabled": getattr(self, "water_temp_enabled", False),
+                "battery_enabled": getattr(self, "battery_enabled", False),
+                "air_temp_enabled": getattr(self, "air_temp_enabled", False),
+                "tanks_enabled": getattr(self, "tanks_enabled", False),
                 "lat": self.lat,
                 "lon": self.lon,
                 "sog": self.sog,
@@ -503,6 +612,10 @@ class NMEASimulator:
                 "tws": self.tws,
                 "twd": self.twd,
                 "magvar": self.magvar,
+                "depth_m": getattr(self, "depth_m", 0),
+                "water_temp_c": getattr(self, "water_temp_c", 0),
+                "battery_v": getattr(self, "battery_v", 0),
+                "air_temp_c": getattr(self, "air_temp_c", 0),
                 "sim_time": self.sim_time.isoformat() if self.sim_time else None,
                 "started_at": self._started_at.isoformat() if self._started_at else None,
                 "gnss": self._last_status.get("gnss") if isinstance(self._last_status, dict) else None,
@@ -579,13 +692,26 @@ class NMEASimulator:
                         if self.lon < -180:
                             self.lon += 360
 
-                        # Random walk adjustments
-                        self.sog = max(0, min(self.sog + random.uniform(-0.2, 0.2), 15.0))
-                        self.cog = (self.cog + random.uniform(-2.0, 2.0)) % 360
-                    self.tws = max(0, min(self.tws + random.uniform(-0.3, 0.3), 30.0))
-                    self.twd = (self.twd + random.uniform(-3.0, 3.0)) % 360
-
-                    # Derived values
+                    # Random walk adjustments
+                    self.sog = max(0, min(self.sog + random.uniform(-0.2, 0.2), 15.0))
+                    self.cog = (self.cog + random.uniform(-2.0, 2.0)) % 360
+                self.tws = max(0, min(self.tws + random.uniform(-0.3, 0.3), 30.0))
+                self.twd = (self.twd + random.uniform(-3.0, 3.0)) % 360
+                
+                # Sensor variations
+                if self.depth_enabled:
+                    self.depth_m = max(0.5, min(self.depth_m + random.uniform(-0.3, 0.3), 200.0))
+                if self.water_temp_enabled:
+                    self.water_temp_c = max(5.0, min(self.water_temp_c + random.uniform(-0.1, 0.1), 35.0))
+                if self.battery_enabled:
+                    self.battery_v = max(10.5, min(self.battery_v + random.uniform(-0.05, 0.05), 14.5))
+                if self.air_temp_enabled:
+                    self.air_temp_c = max(-10.0, min(self.air_temp_c + random.uniform(-0.2, 0.2), 45.0))
+                if self.tanks_enabled:
+                    # Tanks slowly decrease
+                    self.tank_fresh_water = max(0.0, min(self.tank_fresh_water - random.uniform(0, 0.1), 100.0))
+                    self.tank_fuel = max(0.0, min(self.tank_fuel - random.uniform(0, 0.05), 100.0))
+                    self.tank_waste = max(0.0, min(self.tank_waste + random.uniform(0, 0.05), 100.0))                    # Derived values
                     cog_mag = (self.cog - self.magvar + 360) % 360
                     sog_kmh = self.sog * 1.852
                     twd_mag = (self.twd - self.magvar + 360) % 360
@@ -644,6 +770,29 @@ class NMEASimulator:
                     if getattr(self, "heading_enabled", False):
                         nmea_hdt = create_hchdt(self.cog)
                         full_nmea_packet += nmea_hdt
+                    # Depth sentences when enabled
+                    if self.depth_enabled:
+                        nmea_sddpt = create_sddpt(self.depth_m, self.depth_offset_m)
+                        nmea_sddbt = create_sddbt(self.depth_m)
+                        full_nmea_packet += nmea_sddpt + nmea_sddbt
+                    # Water temperature when enabled
+                    if self.water_temp_enabled:
+                        nmea_wimtw = create_wimtw(self.water_temp_c)
+                        full_nmea_packet += nmea_wimtw
+                    # Battery voltage when enabled
+                    if self.battery_enabled:
+                        nmea_xdr_batt = create_xdr_battery(self.battery_v)
+                        full_nmea_packet += nmea_xdr_batt
+                    # Air temperature when enabled
+                    if self.air_temp_enabled:
+                        nmea_xdr_air = create_xdr_air_temp(self.air_temp_c)
+                        full_nmea_packet += nmea_xdr_air
+                    # Tank levels when enabled
+                    if self.tanks_enabled:
+                        nmea_xdr_tank_fw = create_xdr_tank(self.tank_fresh_water, "FreshWater")
+                        nmea_xdr_tank_fuel = create_xdr_tank(self.tank_fuel, "Fuel")
+                        nmea_xdr_tank_waste = create_xdr_tank(self.tank_waste, "WasteWater")
+                        full_nmea_packet += nmea_xdr_tank_fw + nmea_xdr_tank_fuel + nmea_xdr_tank_waste
 
                     # Update last status for API consumers
                     self._last_status = {

@@ -21,6 +21,26 @@ const magvarEl = document.getElementById('magvar');
 const headingEnabledEl = document.getElementById('heading_enabled');
 const statusText = document.getElementById('statusText');
 
+// Sensor elements
+const depthEnabledEl = document.getElementById('depth_enabled');
+const depthFieldsEl = document.getElementById('depth_fields');
+const depthMEl = document.getElementById('depth_m');
+const depthOffsetMEl = document.getElementById('depth_offset_m');
+const waterTempEnabledEl = document.getElementById('water_temp_enabled');
+const waterTempFieldsEl = document.getElementById('water_temp_fields');
+const waterTempCEl = document.getElementById('water_temp_c');
+const batteryEnabledEl = document.getElementById('battery_enabled');
+const batteryFieldsEl = document.getElementById('battery_fields');
+const batteryVEl = document.getElementById('battery_v');
+const airTempEnabledEl = document.getElementById('air_temp_enabled');
+const airTempFieldsEl = document.getElementById('air_temp_fields');
+const airTempCEl = document.getElementById('air_temp_c');
+const tanksEnabledEl = document.getElementById('tanks_enabled');
+const tanksFieldsEl = document.getElementById('tanks_fields');
+const tankFreshWaterEl = document.getElementById('tank_fresh_water');
+const tankFuelEl = document.getElementById('tank_fuel');
+const tankWasteEl = document.getElementById('tank_waste');
+
 const startBtn = document.getElementById('startBtn');
 const stopBtn = document.getElementById('stopBtn');
 const restartBtn = document.getElementById('restartBtn');
@@ -461,6 +481,19 @@ async function start(){
   interval: parseFloat((getInitMode()==='gpx' ? intervalGpxEl.value : intervalEl.value)),
   wind_enabled: getWindEnabled(),
     heading_enabled: headingEnabledEl ? !!headingEnabledEl.checked : false,
+    depth_enabled: depthEnabledEl ? !!depthEnabledEl.checked : false,
+    depth_m: depthMEl ? parseFloat(depthMEl.value) : 12.0,
+    depth_offset_m: depthOffsetMEl ? parseFloat(depthOffsetMEl.value) : 0.3,
+    water_temp_enabled: waterTempEnabledEl ? !!waterTempEnabledEl.checked : false,
+    water_temp_c: waterTempCEl ? parseFloat(waterTempCEl.value) : 18.0,
+    battery_enabled: batteryEnabledEl ? !!batteryEnabledEl.checked : false,
+    battery_v: batteryVEl ? parseFloat(batteryVEl.value) : 12.5,
+    air_temp_enabled: airTempEnabledEl ? !!airTempEnabledEl.checked : false,
+    air_temp_c: airTempCEl ? parseFloat(airTempCEl.value) : 20.0,
+    tanks_enabled: tanksEnabledEl ? !!tanksEnabledEl.checked : false,
+    tank_fresh_water: tankFreshWaterEl ? parseFloat(tankFreshWaterEl.value) : 80.0,
+    tank_fuel: tankFuelEl ? parseFloat(tankFuelEl.value) : 60.0,
+    tank_waste: tankWasteEl ? parseFloat(tankWasteEl.value) : 15.0,
     lat: parseFloat(latEl.value),
     lon: parseFloat(lonEl.value),
     start_datetime: startDtEl.value ? new Date(startDtEl.value).toISOString() : null,
@@ -493,6 +526,19 @@ async function restart(){
   interval: parseFloat((getInitMode()==='gpx' ? intervalGpxEl.value : intervalEl.value)),
   wind_enabled: getWindEnabled(),
     heading_enabled: headingEnabledEl ? !!headingEnabledEl.checked : false,
+    depth_enabled: depthEnabledEl ? !!depthEnabledEl.checked : false,
+    depth_m: depthMEl ? parseFloat(depthMEl.value) : 12.0,
+    depth_offset_m: depthOffsetMEl ? parseFloat(depthOffsetMEl.value) : 0.3,
+    water_temp_enabled: waterTempEnabledEl ? !!waterTempEnabledEl.checked : false,
+    water_temp_c: waterTempCEl ? parseFloat(waterTempCEl.value) : 18.0,
+    battery_enabled: batteryEnabledEl ? !!batteryEnabledEl.checked : false,
+    battery_v: batteryVEl ? parseFloat(batteryVEl.value) : 12.5,
+    air_temp_enabled: airTempEnabledEl ? !!airTempEnabledEl.checked : false,
+    air_temp_c: airTempCEl ? parseFloat(airTempCEl.value) : 20.0,
+    tanks_enabled: tanksEnabledEl ? !!tanksEnabledEl.checked : false,
+    tank_fresh_water: tankFreshWaterEl ? parseFloat(tankFreshWaterEl.value) : 80.0,
+    tank_fuel: tankFuelEl ? parseFloat(tankFuelEl.value) : 60.0,
+    tank_waste: tankWasteEl ? parseFloat(tankWasteEl.value) : 15.0,
     lat: parseFloat(latEl.value),
     lon: parseFloat(lonEl.value),
     start_datetime: startDtEl.value ? new Date(startDtEl.value).toISOString() : null,
@@ -531,3 +577,36 @@ function updateWindUI(){
 if (windToggleEl){ windToggleEl.addEventListener('change', updateWindUI); }
 if (windSelectEl){ windSelectEl.addEventListener('change', updateWindUI); }
 updateWindUI();
+
+// Sensor UI show/hide
+function updateDepthUI(){
+  const on = depthEnabledEl && depthEnabledEl.checked;
+  if (depthFieldsEl){ depthFieldsEl.style.display = on ? '' : 'none'; }
+}
+function updateWaterTempUI(){
+  const on = waterTempEnabledEl && waterTempEnabledEl.checked;
+  if (waterTempFieldsEl){ waterTempFieldsEl.style.display = on ? '' : 'none'; }
+}
+function updateBatteryUI(){
+  const on = batteryEnabledEl && batteryEnabledEl.checked;
+  if (batteryFieldsEl){ batteryFieldsEl.style.display = on ? '' : 'none'; }
+}
+function updateAirTempUI(){
+  const on = airTempEnabledEl && airTempEnabledEl.checked;
+  if (airTempFieldsEl){ airTempFieldsEl.style.display = on ? '' : 'none'; }
+}
+function updateTanksUI(){
+  const on = tanksEnabledEl && tanksEnabledEl.checked;
+  if (tanksFieldsEl){ tanksFieldsEl.style.display = on ? '' : 'none'; }
+}
+if (depthEnabledEl){ depthEnabledEl.addEventListener('change', updateDepthUI); }
+if (waterTempEnabledEl){ waterTempEnabledEl.addEventListener('change', updateWaterTempUI); }
+if (batteryEnabledEl){ batteryEnabledEl.addEventListener('change', updateBatteryUI); }
+if (airTempEnabledEl){ airTempEnabledEl.addEventListener('change', updateAirTempUI); }
+if (tanksEnabledEl){ tanksEnabledEl.addEventListener('change', updateTanksUI); }
+updateDepthUI();
+updateWaterTempUI();
+updateBatteryUI();
+updateAirTempUI();
+updateTanksUI();
+
