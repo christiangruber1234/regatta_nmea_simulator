@@ -174,6 +174,17 @@ def create_wimwv_apparent(awa_deg, aws_knots) -> str:
     checksum = calculate_nmea_checksum(body)
     return f"${body}*{checksum}\r\n"
 
+# --- Heading (True) NMEA ---
+def create_hchdt(heading_true_deg: float) -> str:
+    """Creates an HDT (Heading, True) sentence using HC talker.
+    $HCHDT,xxx.x,T*CS
+    """
+    h = (heading_true_deg % 360.0)
+    h_str = f"{h:.1f}"
+    body = f"HCHDT,{h_str},T"
+    checksum = calculate_nmea_checksum(body)
+    return f"${body}*{checksum}\r\n"
+
 # --- AIS Helpers (AIVDM Type 18 - Class B position) ---
 
 def _pack_signed(value: int, bits: int) -> str:
@@ -321,6 +332,7 @@ class NMEASimulator:
         port: int = TARGET_PORT,
         interval: float = SEND_INTERVAL,
         wind_enabled: bool = WIND_INSTRUMENTS_ENABLED,
+        heading_enabled: bool = False,
         start_lat: float = DEFAULT_LAT,
         start_lon: float = DEFAULT_LON,
         sog_knots: float = DEFAULT_SOG,
@@ -395,6 +407,8 @@ class NMEASimulator:
         self._sock: Optional[socket.socket] = None
         self._last_status = {}
         self._started_at: Optional[datetime] = None
+        # Options
+        self.heading_enabled = bool(heading_enabled)
         # Stream buffer of recent lines
         self._stream = deque(maxlen=200)
         # Last minute when Type 24 static messages were emitted
@@ -481,6 +495,7 @@ class NMEASimulator:
                 "tcp_host": getattr(self, "tcp_host", "0.0.0.0"),
                 "interval": self.interval,
                 "wind_enabled": self.wind_enabled,
+                "heading_enabled": getattr(self, "heading_enabled", False),
                 "lat": self.lat,
                 "lon": self.lon,
                 "sog": self.sog,
@@ -625,6 +640,10 @@ class NMEASimulator:
                         nmea_wimwv_true = create_wimwv_true(twa, self.tws)
                         nmea_wimwv_apparent = create_wimwv_apparent(awa, aws)
                         full_nmea_packet += nmea_wimwd + nmea_wimwv_true + nmea_wimwv_apparent
+                    # True heading (HDT) derived from COG when enabled
+                    if getattr(self, "heading_enabled", False):
+                        nmea_hdt = create_hchdt(self.cog)
+                        full_nmea_packet += nmea_hdt
 
                     # Update last status for API consumers
                     self._last_status = {
@@ -1074,6 +1093,7 @@ if __name__ == "__main__":
     parser.add_argument("--port", type=int, default=TARGET_PORT, help="Target UDP port")
     parser.add_argument("--interval", type=float, default=SEND_INTERVAL, help="Send interval seconds")
     parser.add_argument("--wind", action="store_true", help="Enable wind sentences")
+    parser.add_argument("--heading", action="store_true", help="Enable HDT (true heading) derived from COG")
     parser.add_argument("--lat", type=float, default=DEFAULT_LAT, help="Starting latitude")
     parser.add_argument("--lon", type=float, default=DEFAULT_LON, help="Starting longitude")
     parser.add_argument("--sog", type=float, default=DEFAULT_SOG, help="Initial SOG (knots)")
@@ -1108,6 +1128,7 @@ if __name__ == "__main__":
         args.port,
         args.interval,
         wind_enabled=args.wind,
+        heading_enabled=args.heading,
         start_lat=args.lat,
         start_lon=args.lon,
         sog_knots=args.sog,

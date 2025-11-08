@@ -116,6 +116,7 @@ def api_start():
             tcp_host=str(data.get("tcp_host", "0.0.0.0")).strip() or "0.0.0.0",
             interval=float(data.get("interval", 1.0)),
             wind_enabled=bool(data.get("wind_enabled", True)),
+            heading_enabled=bool(data.get("heading_enabled", False)),
             start_lat=float(data.get("lat", 47.0707)),
             start_lon=float(data.get("lon", 15.4395)),
             sog_knots=float(data.get("sog", 5.0)),

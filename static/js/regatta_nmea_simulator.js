@@ -18,6 +18,7 @@ const cogEl = document.getElementById('cog');
 const twsEl = document.getElementById('tws');
 const twdEl = document.getElementById('twd');
 const magvarEl = document.getElementById('magvar');
+const headingEnabledEl = document.getElementById('heading_enabled');
 const statusText = document.getElementById('statusText');
 
 const startBtn = document.getElementById('startBtn');
@@ -459,6 +460,7 @@ async function start(){
     tcp_host: tcpHostEl ? tcpHostEl.value : '0.0.0.0',
   interval: parseFloat((getInitMode()==='gpx' ? intervalGpxEl.value : intervalEl.value)),
   wind_enabled: getWindEnabled(),
+    heading_enabled: headingEnabledEl ? !!headingEnabledEl.checked : false,
     lat: parseFloat(latEl.value),
     lon: parseFloat(lonEl.value),
     start_datetime: startDtEl.value ? new Date(startDtEl.value).toISOString() : null,
@@ -490,6 +492,7 @@ async function restart(){
     tcp_host: tcpHostEl ? tcpHostEl.value : '0.0.0.0',
   interval: parseFloat((getInitMode()==='gpx' ? intervalGpxEl.value : intervalEl.value)),
   wind_enabled: getWindEnabled(),
+    heading_enabled: headingEnabledEl ? !!headingEnabledEl.checked : false,
     lat: parseFloat(latEl.value),
     lon: parseFloat(lonEl.value),
     start_datetime: startDtEl.value ? new Date(startDtEl.value).toISOString() : null,

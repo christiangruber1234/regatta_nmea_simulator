@@ -10,6 +10,7 @@ Fork note: This project was originally created by Christian Heiling and forked f
   - GPS/GNSS: GPRMC, GPGGA, GPVTG, GPGSA, GPGSV
   - Wind (optional): WIMWD, WIMWV (True and Apparent)
   - AIS: !AIVDM Type 18 (Class B position) and Type 24 Part A (static data)
+  - Heading (optional): HCHDT (true heading derived from COG when enabled)
 - Realistic simulation: SOG, COG, wind speed/direction and position evolve over time
 - AIS targets: configurable count, random spatial distribution, speed/course offsets
 - Built-in TCP server to stream the same NMEA payload to multiple clients
@@ -83,6 +84,8 @@ Pages (templates in `templates/`):
     - GPX: Upload file, Interval (s), filename bar, slider for time or index with precise preview
   - Wind
     - Toggle On/Off; shows/hides TWS/TWD inputs
+  - Heading
+    - Toggle to emit `$HCHDT` (true heading) computed from current COG
   - Map
     - Click/drag to set starting position (manual mode); theme-aware tiles; OpenSeaMap seamarks overlay
 
@@ -113,7 +116,7 @@ Notes:
 All endpoints return/consume JSON.
 
 - GET `/api/status`
-  - Returns: `{ running, host, port, tcp_port, tcp_host, interval, wind_enabled, lat, lon, sog, cog, tws, twd, magvar, sim_time, started_at, gnss, ais, stream_size, tcp_clients, gpx_track_info }`
+  - Returns: `{ running, host, port, tcp_port, tcp_host, interval, wind_enabled, heading_enabled, lat, lon, sog, cog, tws, twd, magvar, sim_time, started_at, gnss, ais, stream_size, tcp_clients, gpx_track_info }`
   - `started_at` is an ISO8601 timestamp used for the running timer
   - `gpx_track_info` includes `{ points, start_time, end_time, duration_s, has_time, progress }`, where `progress` is `{ mode: 'time', offset_s }` or `{ mode: 'index', fraction }`
 
@@ -128,7 +131,8 @@ All endpoints return/consume JSON.
     - Timing: `interval` seconds; `start_datetime` ISO8601 (UTC assumed if no tz)
     - Position: `lat`, `lon`
     - Navigation: `sog`, `cog`, `magvar`
-    - Wind: `wind_enabled` (bool), `tws`, `twd`
+  - Wind: `wind_enabled` (bool), `tws`, `twd`
+  - Heading: `heading_enabled` (bool) to add HDT sentence derived from COG
     - AIS: `ais_num_targets`, `ais_max_cog_offset`, `ais_max_sog_offset`, `ais_distribution_radius_nm`
     - GPX: `gpx_id` (from upload), and one of:
       - `gpx_offset_s` (start at GPX start time + offset seconds)
@@ -162,6 +166,7 @@ NMEASimulator(
   host="127.0.0.1", port=10110,
   interval=1.0,
   wind_enabled=True,
+  heading_enabled=False,
   start_lat=..., start_lon=...,
   sog_knots=5.0, cog_degrees=185.0,
   tws_knots=10.0, twd_degrees=270.0,
@@ -188,6 +193,7 @@ Outputs each tick:
 
 - GNSS/NMEA: GPRMC, GPGGA, GPVTG, GPGSA, GPGSV
 - Wind (when enabled): WIMWD, WIMWV (True + Apparent)
+- Heading (when enabled): HCHDT (True heading)
 - AIS (when configured): !AIVDM Type 18, and periodic Type 24 Part A
 
 ## Map tiles and night mode
