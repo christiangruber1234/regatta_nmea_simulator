@@ -6,6 +6,24 @@ A feature-rich NMEA 0183 simulator with a web UI, UDP/TCP output, AIS target sim
 **License:** MIT  
 **Repository:** [github.com/christiangruber1234/regatta_nmea_simulator](https://github.com/christiangruber1234/regatta_nmea_simulator)
 
+## Table of Contents
+
+- [Screenshots](#screenshots)
+- [Features](#features)
+- [Requirements](#requirements)
+- [Install and run (Web UI)](#install-and-run-web-ui)
+- [Install and run (CLI)](#install-and-run-cli)
+- [Web UI Overview](#web-ui-overview)
+- [REST API](#rest-api)
+- [NMEASimulator Class](#nmeasimulator-class)
+- [Map Tiles and Themes](#map-tiles-and-themes)
+- [Troubleshooting](#troubleshooting)
+- [Project Structure](#project-structure)
+- [License](#license)
+- [Use Cases](#use-cases)
+- [Contributing](#contributing)
+- [Acknowledgments](#acknowledgments)
+
 ## Screenshots
 
 ### Simulator Page
