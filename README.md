@@ -6,8 +6,6 @@ A feature-rich NMEA 0183 simulator with a web UI, UDP/TCP output, AIS target sim
 **License:** MIT  
 **Repository:** [github.com/christiangruber1234/regatta_nmea_simulator](https://github.com/christiangruber1234/regatta_nmea_simulator)
 
-**Note:** The initial simulator code was forked from Christian Heiling's repository: [github.com/heilingch/polar_performance](https://github.com/heilingch/polar_performance)
-
 ## Screenshots
 
 ### Simulator Page
@@ -747,3 +745,7 @@ Contributions are welcome! Please feel free to submit issues, feature requests, 
 - OpenSeaMap for nautical overlay data
 - Leaflet.js for mapping library
 - Flask framework for web backend
+
+---
+
+**Note:** The initial simulator code was forked from Christian Heiling's repository: [github.com/heilingch/polar_performance](https://github.com/heilingch/polar_performance)
