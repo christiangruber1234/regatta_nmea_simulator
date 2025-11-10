@@ -166,7 +166,7 @@ let marker = L.marker([parseFloat(latEl.value), parseFloat(lonEl.value)], {
   opacity: 0
 }).addTo(map);
 let currentMarker = null; // simulator current position when running
-let aisMarkers = new Map(); // mmsi -> marker for AIS targets
+let aisMarkers = new Map(); // mmsi -> {marker, directionLine} for AIS targets
 
 // Boat heading marker
 let boatMarker = null;
@@ -256,6 +256,28 @@ function updateWindArrow() {
     windArrowMarker.setLatLng([lat, lon]);
     windArrowMarker.setIcon(createWindIcon(twd, tws));
   }
+}
+
+// Calculate end point for AIS direction line
+// Returns [lat, lon] for a point at distance_nm in direction cog_degrees from origin
+function calculateDirectionEndpoint(lat, lon, cog_degrees, distance_nm) {
+  const R = 6371.0; // Earth radius in km
+  const d = distance_nm * 1.852; // Convert nm to km
+  const bearing = cog_degrees * Math.PI / 180.0; // Convert to radians
+  const lat1 = lat * Math.PI / 180.0;
+  const lon1 = lon * Math.PI / 180.0;
+  
+  const lat2 = Math.asin(
+    Math.sin(lat1) * Math.cos(d / R) +
+    Math.cos(lat1) * Math.sin(d / R) * Math.cos(bearing)
+  );
+  
+  const lon2 = lon1 + Math.atan2(
+    Math.sin(bearing) * Math.sin(d / R) * Math.cos(lat1),
+    Math.cos(d / R) - Math.sin(lat1) * Math.sin(lat2)
+  );
+  
+  return [lat2 * 180.0 / Math.PI, lon2 * 180.0 / Math.PI];
 }
 
 // Initial update
@@ -693,27 +715,51 @@ async function refreshStatus(){
       for (const t of ais) {
         seen.add(String(t.mmsi));
         const latLng = [t.lat, t.lon];
-        let m = aisMarkers.get(String(t.mmsi));
-        if (!m) {
-          m = L.circleMarker(latLng, { radius: 5, color: '#1e90ff', fillColor: '#1e90ff', fillOpacity: 0.9 }).addTo(map);
-          m.bindTooltip(`${t.display_name || (t.name || 'Vessel')}\nMMSI ${t.mmsi}`);
-          aisMarkers.set(String(t.mmsi), m);
+        const cog = t.cog || 0;
+        const sog = t.sog || 0;
+        
+        // Calculate direction line endpoint (length proportional to SOG, min 0.5nm, max 2nm)
+        const lineLength = Math.min(2.0, Math.max(0.5, sog * 0.2));
+        const endPoint = calculateDirectionEndpoint(t.lat, t.lon, cog, lineLength);
+        
+        let aisData = aisMarkers.get(String(t.mmsi));
+        if (!aisData) {
+          // Create new marker and direction line
+          const marker = L.circleMarker(latLng, { 
+            radius: 5, 
+            color: '#1e90ff', 
+            fillColor: '#1e90ff', 
+            fillOpacity: 0.9 
+          }).addTo(map);
+          marker.bindTooltip(`${t.display_name || (t.name || 'Vessel')}\nMMSI ${t.mmsi}`);
+          
+          const directionLine = L.polyline([latLng, endPoint], {
+            color: '#1e90ff',
+            weight: 2,
+            opacity: 0.7
+          }).addTo(map);
+          
+          aisMarkers.set(String(t.mmsi), { marker, directionLine });
         } else {
-          m.setLatLng(latLng);
-          m.setTooltipContent(`${t.display_name || (t.name || 'Vessel')}\nMMSI ${t.mmsi}`);
+          // Update existing marker and direction line
+          aisData.marker.setLatLng(latLng);
+          aisData.marker.setTooltipContent(`${t.display_name || (t.name || 'Vessel')}\nMMSI ${t.mmsi}`);
+          aisData.directionLine.setLatLngs([latLng, endPoint]);
         }
       }
-      // Remove stale markers
-      for (const [k, m] of aisMarkers) {
+      // Remove stale markers and lines
+      for (const [k, aisData] of aisMarkers) {
         if (!seen.has(k)) {
-          map.removeLayer(m);
+          map.removeLayer(aisData.marker);
+          map.removeLayer(aisData.directionLine);
           aisMarkers.delete(k);
         }
       }
     } else {
-      // Clear all AIS markers when stopped
-      for (const [k, m] of aisMarkers) {
-        map.removeLayer(m);
+      // Clear all AIS markers and direction lines when stopped
+      for (const [k, aisData] of aisMarkers) {
+        map.removeLayer(aisData.marker);
+        map.removeLayer(aisData.directionLine);
       }
       aisMarkers.clear();
     }
