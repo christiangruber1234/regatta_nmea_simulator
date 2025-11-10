@@ -99,12 +99,14 @@ def api_start():
         gpx_id = data.get("gpx_id")
         gpx_points = None
         gpx_meta = None
+        gpx_mode = False
         if gpx_id:
             g = GPX_STORE.get(str(gpx_id))
             if not g:
                 return jsonify({"ok": False, "error": "Invalid gpx_id"}), 400
             gpx_points = g.get("points")
             gpx_meta = g.get("meta")
+            gpx_mode = True
         # Optional GPX cursor controls from UI
         gpx_offset_s = data.get("gpx_offset_s")
         gpx_start_fraction = data.get("gpx_start_fraction")
@@ -138,7 +140,7 @@ def api_start():
             tank_fuel=float(data.get("tank_fuel", 60.0)),
             tank_waste=float(data.get("tank_waste", 30.0)),
             start_datetime=start_dt,
-            ais_num_targets=int(data.get("ais_num_targets", 20)),
+            ais_num_targets=0 if gpx_mode else int(data.get("ais_num_targets", 20)),
             ais_max_cog_offset=float(data.get("ais_max_cog_offset", 20.0)),
             ais_max_sog_offset=float(data.get("ais_max_sog_offset", 2.0)),
             ais_distribution_radius_nm=float(data.get("ais_distribution_radius_nm", 10.0)),
