@@ -355,9 +355,39 @@ function updateInitModeUI(){
     if (gpxParams) gpxParams.style.display = 'none';
   }
 }
-if (initModeEl){ initModeEl.addEventListener('change', () => { updateInitModeUI(); persistUiState(); }); }
-if (initModeToggle){ initModeToggle.addEventListener('change', () => { updateInitModeUI(); persistUiState(); }); }
+function updateAisBasedOnMode(){
+  const mode = getInitMode();
+  const aisEnabledEl = document.getElementById('ais_enabled');
+  const aisSection = aisEnabledEl ? aisEnabledEl.closest('.card') : null;
+  
+  if (mode === 'gpx'){
+    // Disable AIS in GPX mode
+    if (aisEnabledEl) {
+      aisEnabledEl.checked = false;
+      aisEnabledEl.disabled = true;
+    }
+    if (aisSection) {
+      aisSection.style.opacity = '0.5';
+      aisSection.style.pointerEvents = 'none';
+    }
+    updateAisUI();
+  } else {
+    // Enable AIS in manual mode
+    if (aisEnabledEl) {
+      aisEnabledEl.disabled = false;
+    }
+    if (aisSection) {
+      aisSection.style.opacity = '1';
+      aisSection.style.pointerEvents = 'auto';
+    }
+  }
+}
+if (initModeEl){ initModeEl.addEventListener('change', () => { updateInitModeUI(); persistUiState(); updateAisBasedOnMode(); }); }
+if (initModeToggle){ initModeToggle.addEventListener('change', () => { updateInitModeUI(); persistUiState(); updateAisBasedOnMode(); }); }
+// Initialize to manual mode before any UI updates
+setInitMode('manual');
 updateInitModeUI();
+updateAisBasedOnMode();
 
 // Upload GPX
 async function uploadGpx(file){
@@ -488,8 +518,15 @@ if (gpxSliderEl){ gpxSliderEl.addEventListener('change', persistUiState); }
 // Rehydrate from persisted state on load
 function restorePersisted(){
   try {
+  // Always default to manual mode unless explicitly saved as gpx
   const savedMode = localStorage.getItem('ui.initMode');
-  if (savedMode){ setInitMode(savedMode); updateInitModeUI(); }
+  // Clear any old default that might have been 'gpx'
+  if (!savedMode) {
+    localStorage.setItem('ui.initMode', 'manual');
+  }
+  setInitMode(savedMode || 'manual');
+  updateInitModeUI();
+  updateAisBasedOnMode();
     const savedMeta = localStorage.getItem('gpx.currentMeta');
     const savedId = localStorage.getItem('gpx.currentId');
     const savedFilename = localStorage.getItem('gpx.filename');
@@ -557,6 +594,10 @@ async function refreshStatus(){
     // Sync UI with actual simulator state (enabled/disabled toggles and current values)
     // Skip fields that were recently updated by the user to prevent overwriting their changes
     if (running && data) {
+      // Temporarily mark all fields as recently updated to prevent triggering change events
+      const wasUpdating = window.isRefreshing || false;
+      window.isRefreshing = true;
+      
       // Update Starting Conditions panel - skip if recently updated
       if (typeof data.lat === 'number' && latEl && !recentlyUpdatedFields.has('lat')) {
         latEl.value = data.lat.toFixed(6);
@@ -656,6 +697,9 @@ async function refreshStatus(){
       if (typeof data.tank_waste === 'number' && tankWasteEl && !recentlyUpdatedFields.has('tank_waste')) {
         tankWasteEl.value = data.tank_waste.toFixed(1);
       }
+      
+      // Reset the refreshing flag after all updates
+      window.isRefreshing = false;
       
       // Update map markers with current values
       updateBoatHeading();
@@ -920,6 +964,37 @@ async function resetToDefaults() {
     await stop();
   }
   
+  // Clear all localStorage cache
+  try {
+    localStorage.clear();
+  } catch(e) {
+    console.warn('Failed to clear localStorage:', e);
+  }
+  
+  // Clear GPX data
+  currentGpxId = null;
+  currentGpxMeta = null;
+  gpxSelectedOffsetS = 0;
+  gpxSelectedFraction = 0;
+  if (gpxPolyline) {
+    map.removeLayer(gpxPolyline);
+    gpxPolyline = null;
+  }
+  if (gpxFileEl) gpxFileEl.value = '';
+  if (gpxFilenameBar) gpxFilenameBar.textContent = 'No GPX selected.';
+  if (gpxMetaEl) gpxMetaEl.innerHTML = 'No file uploaded.';
+  if (gpxSliderEl) {
+    gpxSliderEl.min = 0;
+    gpxSliderEl.max = 0;
+    gpxSliderEl.value = 0;
+  }
+  if (gpxCursorLabel) gpxCursorLabel.textContent = '—';
+  
+  // Reset mode to manual (Set parameters)
+  setInitMode('manual');
+  updateInitModeUI();
+  updateAisBasedOnMode();
+  
   // Reset all fields to their default values
   if (latEl) latEl.value = '42.715769349296004';
   if (lonEl) lonEl.value = '16.23217374761267';
@@ -973,6 +1048,9 @@ async function resetToDefaults() {
   if (tcpPortEl) tcpPortEl.value = '10111';
   if (tcpHostEl) tcpHostEl.value = '0.0.0.0';
   
+  // Set default start date/time to current UTC
+  setDefaultStartUTC();
+  
   // Update map markers
   updateBoatHeading();
   updateWindArrow();
@@ -984,6 +1062,15 @@ async function resetToDefaults() {
       marker.setLatLng([parseFloat(latEl.value), parseFloat(lonEl.value)]);
     }
   }
+  
+  // Reset theme to dark (default)
+  html.setAttribute('data-theme', 'dark');
+  localStorage.setItem('theme', 'dark');
+  updateThemeIcon();
+  // Switch map tiles to match theme
+  map.removeLayer(currentTiles);
+  currentTiles = darkTiles;
+  currentTiles.addTo(map);
 }
 
 // Track if simulator is running and recently updated fields
@@ -1069,6 +1156,9 @@ async function sendLiveUpdate() {
 
 // Handle field changes with debouncing
 function handleFieldChange(fieldId) {
+  // Ignore changes triggered by refreshStatus updates
+  if (window.isRefreshing) return;
+  
   if (!isSimulatorRunning) return;
   
   // Mark this field as recently updated
