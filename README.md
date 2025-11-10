@@ -14,6 +14,12 @@ A feature-rich NMEA 0183 simulator with a web UI, UDP/TCP output, AIS target sim
 ### Status Page
 ![Status Page](screenshot_status.png)
 
+### OpenCPN Integration
+The simulator works seamlessly with OpenCPN and other marine navigation software. Simply configure your chart plotter or navigation application to listen for NMEA data on UDP port 10110 (or your configured port). The simulator provides realistic GPS position, speed, course, wind data, and AIS targets that appear directly in your navigation software.
+
+![OpenCPN receiving NMEA data](doc/screenshot_opencpn.jpg)
+*OpenCPN displaying simulated vessel position, track, and AIS targets from the Regatta NMEA Simulator*
+
 ## Features
 
 - NMEA output over UDP and TCP
