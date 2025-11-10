@@ -290,6 +290,22 @@ function syncInputsFromMarker(){
   lonEl.value = lng.toFixed(6);
   updateBoatHeading();
   updateWindArrow();
+  
+  // If simulator is running, send live update to move boat and AIS targets
+  if (isSimulatorRunning) {
+    // Show visual feedback that position is being updated
+    if (statusText) {
+      const prevText = statusText.textContent;
+      statusText.textContent = 'Updating position...';
+      statusText.style.color = '#3b82f6';
+      setTimeout(() => {
+        statusText.textContent = prevText;
+        statusText.style.color = '';
+      }, 1500);
+    }
+    handleFieldChange('lat');
+    handleFieldChange('lon');
+  }
 }
 marker.on('dragend', syncInputsFromMarker);
 map.on('click', (e) => {
