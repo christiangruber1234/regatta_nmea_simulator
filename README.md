@@ -419,12 +419,6 @@ nc localhost 10111
 curl http://localhost:5080/api/status
 ```
 
-### High CPU usage
-The simulator is designed to run efficiently at 1 Hz (one update per second). If experiencing high CPU:
-- Increase `interval` value (e.g., 2.0 for updates every 2 seconds)
-- Reduce number of AIS targets
-- Reduce GPX track resolution (downsample before uploading)
-
 ## Project Structure
 
 ```
