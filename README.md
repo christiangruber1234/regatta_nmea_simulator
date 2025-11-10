@@ -1,10 +1,12 @@
-# Regatta NMEA 0183 Simulator
+# Regatta NMEA Simulator
 
 A feature-rich NMEA 0183 simulator with a web UI, UDP/TCP output, AIS target simulation, GPX track playback, and live maps with seamarks. Perfect for testing marine navigation applications, chart plotters, and instrument displays.
 
-**Author:** Christian Heiling  
+**Author:** Christian C. Gruber  
 **License:** MIT  
 **Repository:** [github.com/christiangruber1234/regatta_nmea_simulator](https://github.com/christiangruber1234/regatta_nmea_simulator)
+
+**Note:** The initial simulator code was forked from Christian Heiling's repository: [github.com/heilingch/polar_performance](https://github.com/heilingch/polar_performance)
 
 ## Screenshots
 
@@ -708,7 +710,9 @@ Key Files:
 
 MIT License
 
-Copyright (c) 2025 Christian Heiling
+Copyright (c) 2025 Christian C. Gruber
+
+Portions of the initial simulator code were derived from Christian Heiling's work at [github.com/heilingch/polar_performance](https://github.com/heilingch/polar_performance)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
