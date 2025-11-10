@@ -901,11 +901,20 @@ class NMEASimulator:
     def _init_ais_targets(self) -> None:
         self.ais_targets = []
         for i in range(self.ais_num_targets):
-            # Random small offset around own ship position (in nm), uniform in area up to ais_distribution_radius_nm
+            # Random position uniformly distributed within circle of ais_distribution_radius_nm
+            # Use sqrt for uniform area distribution (corrects for increasing circumference with radius)
             r = math.sqrt(random.random()) * self.ais_distribution_radius_nm
+            # Uniform angular distribution
             theta = random.uniform(0, 2 * math.pi)
             dx_nm = r * math.cos(theta)  # east-west in nautical miles
             dy_nm = r * math.sin(theta)  # north-south in nautical miles
+
+            # Apply initial offset to position targets within the distribution radius
+            # Convert nm offsets to lat/lon (1 nm = 1 minute of latitude)
+            initial_lat = self.lat + (dy_nm / 60.0)
+            # Account for longitude convergence at different latitudes
+            cos_lat = math.cos(math.radians(max(-89.99, min(89.99, self.lat)))) or 1e-6
+            initial_lon = self.lon + (dx_nm / (60.0 * cos_lat))
 
             mmsi = 999000001 + i
             # Default seeding values; will be updated each tick
@@ -914,8 +923,8 @@ class NMEASimulator:
 
             t = {
                 "mmsi": mmsi,
-                "lat": self.lat,
-                "lon": self.lon,
+                "lat": initial_lat,
+                "lon": initial_lon,
                 "sog": sog,
                 "cog": cog,
                 "hdg": cog,
