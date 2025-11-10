@@ -152,15 +152,6 @@ Defaults: UDP to 127.0.0.1:10110, 1 Hz.
   - Real-time updates as data is generated
   - Shows all sentence types (GPRMC, GPGGA, GPVTG, GSA, GSV, wind, AIS, sensors)
 
-### Static Assets
-
-Located in `static/`:
-- **`js/regatta_nmea_simulator.js`** — Main SIMULATOR page logic (map initialization, form handling, GPX upload, slider control, API calls)
-- **`js/header_controls.js`** — Shared header controls across all pages (start/stop/reset, running timer, status polling)
-- **`js/app.js`** — Additional shared functionality (if present)
-- **`css/styles.css`** — Complete styling (layout, theme switching, controls, animations, responsive design)
-- **`skippers.txt`** — List of realistic vessel/skipper names used for AIS target naming
-
 ## REST API
 
 The simulator provides a comprehensive REST API for programmatic control. See [REST-API.md](REST-API.md) for complete endpoint documentation.
