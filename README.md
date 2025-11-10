@@ -521,7 +521,3 @@ Contributions are welcome! Please feel free to submit issues, feature requests, 
 - Leaflet.js for mapping library
 - Flask framework for web backend
 - The initial simulator code was forked from Christian Heiling's repository: [github.com/heilingch/polar_performance](https://github.com/heilingch/polar_performance)
-
----
-
-**Note:** The initial simulator code was forked from Christian Heiling's repository: [github.com/heilingch/polar_performance](https://github.com/heilingch/polar_performance)
