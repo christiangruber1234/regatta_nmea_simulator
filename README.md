@@ -482,7 +482,7 @@ Key Files:
 
 MIT License
 
-Copyright (c) 2025 Christian C. Gruber
+Copyright © 2025 Christian C. Gruber
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
@@ -517,7 +517,7 @@ Contributions are welcome! Please feel free to submit issues, feature requests, 
 - OpenSeaMap for nautical overlay data
 - Leaflet.js for mapping library
 - Flask framework for web backend
-- Portions of the initial simulator code were derived from Christian Heiling's work at [github.com/heilingch/polar_performance](https://github.com/heilingch/polar_performance)
+- The initial simulator code was forked from Christian Heiling's repository: [github.com/heilingch/polar_performance](https://github.com/heilingch/polar_performance)
 
 ---
 
