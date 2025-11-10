@@ -695,23 +695,25 @@ class NMEASimulator:
                     # Random walk adjustments
                     self.sog = max(0, min(self.sog + random.uniform(-0.2, 0.2), 15.0))
                     self.cog = (self.cog + random.uniform(-2.0, 2.0)) % 360
-                self.tws = max(0, min(self.tws + random.uniform(-0.3, 0.3), 30.0))
-                self.twd = (self.twd + random.uniform(-3.0, 3.0)) % 360
-                
-                # Sensor variations
-                if self.depth_enabled:
-                    self.depth_m = max(0.5, min(self.depth_m + random.uniform(-0.3, 0.3), 200.0))
-                if self.water_temp_enabled:
-                    self.water_temp_c = max(5.0, min(self.water_temp_c + random.uniform(-0.1, 0.1), 35.0))
-                if self.battery_enabled:
-                    self.battery_v = max(10.5, min(self.battery_v + random.uniform(-0.05, 0.05), 14.5))
-                if self.air_temp_enabled:
-                    self.air_temp_c = max(-10.0, min(self.air_temp_c + random.uniform(-0.2, 0.2), 45.0))
-                if self.tanks_enabled:
-                    # Tanks slowly decrease
-                    self.tank_fresh_water = max(0.0, min(self.tank_fresh_water - random.uniform(0, 0.1), 100.0))
-                    self.tank_fuel = max(0.0, min(self.tank_fuel - random.uniform(0, 0.05), 100.0))
-                    self.tank_waste = max(0.0, min(self.tank_waste + random.uniform(0, 0.05), 100.0))                    # Derived values
+                    self.tws = max(0, min(self.tws + random.uniform(-0.3, 0.3), 30.0))
+                    self.twd = (self.twd + random.uniform(-3.0, 3.0)) % 360
+                    
+                    # Sensor variations
+                    if self.depth_enabled:
+                        self.depth_m = max(0.5, min(self.depth_m + random.uniform(-0.3, 0.3), 200.0))
+                    if self.water_temp_enabled:
+                        self.water_temp_c = max(5.0, min(self.water_temp_c + random.uniform(-0.1, 0.1), 35.0))
+                    if self.battery_enabled:
+                        self.battery_v = max(10.5, min(self.battery_v + random.uniform(-0.05, 0.05), 14.5))
+                    if self.air_temp_enabled:
+                        self.air_temp_c = max(-10.0, min(self.air_temp_c + random.uniform(-0.2, 0.2), 45.0))
+                    if self.tanks_enabled:
+                        # Tanks slowly decrease
+                        self.tank_fresh_water = max(0.0, min(self.tank_fresh_water - random.uniform(0, 0.1), 100.0))
+                        self.tank_fuel = max(0.0, min(self.tank_fuel - random.uniform(0, 0.05), 100.0))
+                        self.tank_waste = max(0.0, min(self.tank_waste + random.uniform(0, 0.05), 100.0))
+                    
+                    # Derived values
                     cog_mag = (self.cog - self.magvar + 360) % 360
                     sog_kmh = self.sog * 1.852
                     twd_mag = (self.twd - self.magvar + 360) % 360

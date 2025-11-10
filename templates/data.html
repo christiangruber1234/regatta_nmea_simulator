@@ -1,10 +1,11 @@
 <!doctype html>
-<html lang="en" data-theme="light">
+<html lang="en" data-theme="dark">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>NMEA Simulator Status</title>
     <link rel="stylesheet" href="https://unpkg.com/modern-css-reset/dist/reset.min.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="/static/css/styles.css" />
     <style>
       .data-container { max-width: 1100px; margin: 20px auto; padding: 16px; }
@@ -30,61 +31,34 @@
       @media (min-width: 900px) { .gnss-grid { grid-template-columns: 1fr 1fr; } }
       .gnss-box { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 10px; }
       .canvas-wrap { position: relative; width: 100%; aspect-ratio: 1 / 1; }
-      .canvas-wrap.wide { aspect-ratio: 4 / 3; }
+      .canvas-wrap.wide { aspect-ratio: 1 / 1; }
       .canvas-wrap > canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
       .legend { display:flex; gap: 10px; align-items:center; font-size: 0.85rem; color: var(--muted); margin-top: 6px; }
       .dot { display:inline-block; width: 10px; height: 10px; border-radius: 50%; border: 1px solid var(--border); }
       .dot.used { background: var(--primary); border-color: var(--primary); }
       .dot.free { background: transparent; }
+      /* AIS Map */
+      .map-canvas { height: 480px; width: 100%; }
+      .map-header { margin-bottom: 8px; }
+      .map-header h2 { margin: 0 0 4px 0; }
     </style>
   </head>
   <body>
     <header class="app-header">
-      <h1>Regatta NMEA 0183 Simulator</h1>
+      <h1>Regatta NMEA Simulator</h1>
       <div class="app-header-center">
-        <button id="startBtn" class="control-btn">Start</button>
-        <button id="stopBtn" class="control-btn">Stop</button>
-        <button id="restartBtn" class="control-btn">Restart</button>
+        <button id="startBtn" class="control-btn">▶ Start</button>
+        <button id="stopBtn" class="control-btn">■ Stop</button>
+        <button id="resetBtn" class="control-btn">⟲ Reset</button>
       </div>
       <nav class="app-nav">
         <a href="/">SETTINGS</a>
-        <a href="/ais">AIS</a>
-        <a href="/data">STATUS</a>
+        <a href="/data" class="active">STATUS</a>
         <button id="themeBtn" title="Toggle Day/Night">☀️</button>
       </nav>
     </header>
 
     <main class="data-container">
-      <section class="card" style="margin-bottom: 16px;">
-        <h2>Navigation</h2>
-        <table>
-          <tbody>
-            <tr><th>Status</th><td id="status">Unknown</td></tr>
-            <tr><th>Latitude</th><td id="lat">-</td></tr>
-            <tr><th>Longitude</th><td id="lon">-</td></tr>
-            <tr><th>SOG (kn)</th><td id="sog">-</td></tr>
-            <tr><th>COG (°T)</th><td id="cog">-</td></tr>
-            <tr><th>Mag Var (°)</th><td id="magvar">-</td></tr>
-            <tr><th>Wind Enabled</th><td id="wind_enabled">-</td></tr>
-            <tr><th>TWS (kn)</th><td id="tws">-</td></tr>
-            <tr><th>TWD (°T)</th><td id="twd">-</td></tr>
-            <tr><th>Sim Time (UTC)</th><td id="sim_time">-</td></tr>
-            <tr><th>TCP Port</th><td id="tcp_port">-</td></tr>
-          </tbody>
-        </table>
-      </section>
-
-      <section class="card" style="margin-bottom: 16px;">
-        <h2>TCP Clients</h2>
-        <p class="muted">Connected TCP clients receiving the NMEA stream.</p>
-        <table>
-          <thead>
-            <tr><th>Client</th><th>Connected</th></tr>
-          </thead>
-          <tbody id="tcpRows"></tbody>
-        </table>
-      </section>
-
       <section class="card" style="margin-bottom: 16px;">
         <h2>GNSS</h2>
         <table>
@@ -122,19 +96,31 @@
         </table>
       </section>
 
-      <section class="card">
+      <section class="card" style="margin-bottom: 16px;">
         <h2>Data Stream</h2>
         <p class="muted">Last 200 lines generated (NMEA and AIS).</p>
   <pre id="streamBox" class="stream-box" style="max-height: 320px; overflow: auto; white-space: pre-wrap;"></pre>
       </section>
+
+      <section class="card">
+        <h2>TCP Clients</h2>
+        <p class="muted">Connected TCP clients receiving the NMEA stream.</p>
+        <table>
+          <thead>
+            <tr><th>Client</th><th>Connected</th></tr>
+          </thead>
+          <tbody id="tcpRows"></tbody>
+        </table>
+      </section>
     </main>
 
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="/static/js/header_controls.js"></script>
   <script>
       // Theme toggle for this page
       const html = document.documentElement;
       const themeBtn = document.getElementById('themeBtn');
-      const savedTheme = localStorage.getItem('theme') || 'light';
+      const savedTheme = localStorage.getItem('theme') || 'dark';
       html.setAttribute('data-theme', savedTheme);
       function updateThemeIcon(){ const isDark = html.getAttribute('data-theme') === 'dark'; if(themeBtn) themeBtn.textContent = isDark ? '🌙' : '☀️'; }
       updateThemeIcon();
@@ -147,6 +133,7 @@
           updateThemeIcon();
         });
       }
+      
       async function api(method, path){
         const res = await fetch(path, { method });
         const data = await res.json();
@@ -154,21 +141,9 @@
         return data;
       }
 
-      function setText(id, val){ document.getElementById(id).textContent = val; }
+      function setText(id, val){ const el = document.getElementById(id); if(el) el.textContent = val; }
 
       function renderData(d){
-        setText('status', d.running ? 'Running' : 'Stopped');
-        setText('lat', (d.lat ?? '-'));
-        setText('lon', (d.lon ?? '-'));
-        setText('sog', (d.sog ?? '-'));
-        setText('cog', (d.cog ?? '-'));
-        setText('magvar', (d.magvar ?? '-'));
-        setText('wind_enabled', d.wind_enabled ? 'Yes' : 'No');
-        setText('tws', d.wind_enabled ? (d.tws ?? '-') : '—');
-        setText('twd', d.wind_enabled ? (d.twd ?? '-') : '—');
-        setText('sim_time', d.sim_time || '—');
-  setText('tcp_port', d.tcp_port ?? '—');
-
         const gnss = d.gnss || {};
         setText('siv', gnss.sats_in_view ?? '-');
         setText('sused', gnss.sats_used ?? '-');

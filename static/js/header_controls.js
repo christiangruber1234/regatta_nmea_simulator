@@ -1,8 +1,11 @@
 (function(){
   const startBtn = document.getElementById('startBtn');
   const stopBtn = document.getElementById('stopBtn');
-  const restartBtn = document.getElementById('restartBtn');
-  if (!startBtn || !stopBtn || !restartBtn) return; // Header controls not present
+  const resetBtn = document.getElementById('resetBtn');
+  if (!startBtn || !stopBtn || !resetBtn) return; // Header controls not present
+
+  // Check if we're on the settings page (has full form)
+  const hasFullSettings = document.getElementById('lat') && document.getElementById('lon') && document.getElementById('sog');
 
   let runningTicker = null;
   let simStartedAtMs = null;
@@ -19,9 +22,9 @@
     if (!startBtn) return;
     if (simStartedAtMs && !isNaN(simStartedAtMs)){
       const diff = Date.now() - simStartedAtMs;
-      startBtn.textContent = `RUNNING ${formatHMS(diff)}`;
+      startBtn.textContent = `▶ RUNNING ${formatHMS(diff)}`;
     } else {
-      startBtn.textContent = 'RUNNING';
+      startBtn.textContent = '▶ RUNNING';
     }
   }
 
@@ -32,7 +35,8 @@
     return data;
   }
 
-  async function refreshHeader(){
+  // This function updates button state and is called from both pages
+  window.updateHeaderButtonState = async function(){
     try{
       const data = await api('GET', '/api/status');
       const running = !!data.running;
@@ -51,39 +55,43 @@
       } else {
         if (runningTicker) { clearInterval(runningTicker); runningTicker = null; }
         simStartedAtMs = null;
-        startBtn.textContent = 'Start';
+        startBtn.textContent = '▶ Start';
         startBtn.classList.remove('btn-running');
         stopBtn.classList.remove('btn-red');
         startBtn.classList.add('btn-green');
       }
     }catch(e){ /* ignore */ }
+  };
+
+  // Only attach event handlers on STATUS page (no full settings)
+  if (!hasFullSettings) {
+    async function doStart(){
+      try{
+        // Minimal start: use server defaults
+        await api('POST', '/api/start', {});
+        await window.updateHeaderButtonState();
+      }catch(e){ alert(e.message || 'Start failed'); }
+    }
+    async function doStop(){
+      try{
+        await api('POST', '/api/stop', {});
+        await window.updateHeaderButtonState();
+      }catch(e){ alert(e.message || 'Stop failed'); }
+    }
+    async function doReset(){
+      try{
+        // On status page, Reset just stops the simulator (no reset to defaults without form)
+        await api('POST', '/api/stop', {});
+        await window.updateHeaderButtonState();
+      }catch(e){ alert(e.message || 'Reset failed'); }
+    }
+
+    startBtn.addEventListener('click', doStart);
+    stopBtn.addEventListener('click', doStop);
+    resetBtn.addEventListener('click', doReset);
   }
 
-  async function doStart(){
-    try{
-      // Minimal start: use server defaults
-      await api('POST', '/api/start', {});
-      await refreshHeader();
-    }catch(e){ alert(e.message || 'Start failed'); }
-  }
-  async function doStop(){
-    try{
-      await api('POST', '/api/stop', {});
-      await refreshHeader();
-    }catch(e){ alert(e.message || 'Stop failed'); }
-  }
-  async function doRestart(){
-    try{
-      await api('POST', '/api/restart', {});
-      await refreshHeader();
-    }catch(e){ alert(e.message || 'Restart failed'); }
-  }
-
-  startBtn.addEventListener('click', doStart);
-  stopBtn.addEventListener('click', doStop);
-  restartBtn.addEventListener('click', doRestart);
-
-  // Initial paint and polling
-  refreshHeader();
-  setInterval(refreshHeader, 2000);
+  // Initial paint and polling for button state (runs on both pages)
+  window.updateHeaderButtonState();
+  setInterval(window.updateHeaderButtonState, 2000);
 })();

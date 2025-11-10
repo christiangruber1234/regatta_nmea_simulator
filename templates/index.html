@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-theme="light">
+<html lang="en" data-theme="dark">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -10,15 +10,14 @@
   </head>
   <body>
     <header class="app-header">
-      <h1>Regatta NMEA 0183 Simulator</h1>
+      <h1>Regatta NMEA Simulator</h1>
       <div class="app-header-center">
-        <button id="startBtn" class="control-btn">Start</button>
-        <button id="stopBtn" class="control-btn">Stop</button>
-        <button id="restartBtn" class="control-btn">Restart</button>
+        <button id="startBtn" class="control-btn">▶ Start</button>
+        <button id="stopBtn" class="control-btn">■ Stop</button>
+        <button id="resetBtn" class="control-btn">⟲ Reset</button>
       </div>
       <nav class="app-nav">
-        <a href="/">SETTINGS</a>
-        <a href="/ais">AIS</a>
+        <a href="/" class="active">SIMULATOR</a>
         <a href="/data">STATUS</a>
         <button id="themeBtn" title="Toggle Day/Night">☀️</button>
       </nav>
@@ -26,28 +25,8 @@
 
     <main class="container">
       <section class="controls card">
-        <h2 style="margin: 0 0 8px 0;">Network</h2>
-        <div class="grid">
-          <div>
-            <label>UDP adress</label>
-            <input id="host" type="text" value="127.0.0.1" />
-          </div>
-          <div>
-            <label>UDP Port</label>
-            <input id="port" type="number" value="10110" min="1" max="65535" />
-          </div>
-          <div>
-            <label>TCP interface</label>
-            <input id="tcp_host" type="text" value="0.0.0.0" />
-          </div>
-          <div>
-            <label>TCP Port</label>
-            <input id="tcp_port" type="number" value="10111" min="1" max="65535" />
-          </div>
-        </div>
-
-        <div class="section-header" style="margin: 16px 0 8px 0;">
-          <h2 style="margin:0;">Initial parameters</h2>
+        <div class="section-header" style="margin: 0 0 8px 0;">
+          <h2 style="margin:0;">Starting Conditions</h2>
           <div class="switch-row" style="justify-content:flex-end;">
             <span class="muted">Set parameters</span>
             <label class="switch">
@@ -60,37 +39,65 @@
 
         <!-- Manual parameters -->
         <div id="manual_params">
-          <div class="grid">
-            <div>
-              <label>Start Latitude</label>
-              <input id="lat" type="number" value="42.715769349296004" step="0.0001" />
-            </div>
-            <div>
-              <label>Start Longitude</label>
-              <input id="lon" type="number" value="16.23217374761267" step="0.0001" />
-            </div>
-            <div class="span-2">
-              <label>Start Date & Time (UTC)</label>
-              <input id="start_datetime" type="datetime-local" />
+          <div class="card" style="margin: 0 0 12px 0; padding: 12px;">
+            <h3 style="margin: 0 0 8px 0;">Position</h3>
+            <div class="grid">
+              <div class="span-2">
+                <label>Start Latitude</label>
+                <input id="lat" type="number" value="42.715769349296004" step="0.0001" />
+              </div>
+              <div class="span-2">
+                <label>Start Longitude</label>
+                <input id="lon" type="number" value="16.23217374761267" step="0.0001" />
+              </div>
             </div>
           </div>
 
-          <div class="grid">
-            <div>
-              <label>Interval (s)</label>
-              <input id="interval" type="number" value="1.0" min="0.1" step="0.1" />
+          <div class="card" style="margin: 0 0 12px 0; padding: 12px;">
+            <h3 style="margin: 0 0 8px 0;">Date & Time</h3>
+            <div class="grid">
+              <div class="span-2">
+                <label>Start Date & Time (UTC)</label>
+                <input id="start_datetime" type="datetime-local" step="1" />
+              </div>
+              <div class="span-2">
+                <label>Interval (s)</label>
+                <input id="interval" type="number" value="1.0" min="0.1" step="0.1" />
+              </div>
             </div>
-            <div>
-              <label>Initial SOG (kn)</label>
-              <input id="sog" type="number" value="5" step="0.1" />
+          </div>
+
+          <div class="card" style="margin: 0 0 12px 0; padding: 12px;">
+            <h3 style="margin: 0 0 8px 0;">Speed & Course</h3>
+            <div class="grid">
+              <div>
+                <label>Initial SOG (kn)</label>
+                <input id="sog" type="number" value="5" step="0.1" />
+              </div>
+              <div>
+                <label>Initial COG (°T)</label>
+                <input id="cog" type="number" value="185" step="1" />
+              </div>
             </div>
-            <div>
-              <label>Initial COG (°T)</label>
-              <input id="cog" type="number" value="185" step="1" />
+          </div>
+
+          <div class="card" style="margin: 0 0 12px 0; padding: 12px;">
+            <div class="section-header" style="margin: 0 0 8px 0;">
+              <h3 style="margin:0;">Heading</h3>
+              <div class="switch-row" style="justify-content:flex-end;">
+                <span class="muted">Off</span>
+                <label class="switch">
+                  <input id="heading_enabled" type="checkbox" checked />
+                  <span class="slider"></span>
+                </label>
+                <span class="muted">On</span>
+              </div>
             </div>
-            <div>
-              <label>Mag Variation (°E:+ / W:-)</label>
-              <input id="magvar" type="number" value="-2.5" step="0.1" />
+            <div id="heading_fields" class="grid">
+              <div class="span-2">
+                <label>Mag Variation (°E:+ / W:-)</label>
+                <input id="magvar" type="number" value="-2.5" step="0.1" />
+              </div>
             </div>
           </div>
         </div>
@@ -125,155 +132,222 @@
           </div>
         </div>
 
-        <div class="section-header" style="margin: 16px 0 8px 0;">
-          <h2 style="margin:0;">Wind</h2>
+        <div class="card" style="margin: 16px 0 0 0; padding: 12px;">
+          <div class="section-header" style="margin: 0 0 8px 0;">
+            <h3 style="margin:0;">Wind</h3>
+            <div class="switch-row" style="justify-content:flex-end;">
+              <span class="muted">Off</span>
+              <label class="switch">
+                <input id="wind_enabled_toggle" type="checkbox" checked />
+                <span class="slider"></span>
+              </label>
+              <span class="muted">On</span>
+            </div>
+          </div>
+          <div id="wind_fields" class="grid">
+            <div>
+              <label>Initial TWS (kn)</label>
+              <input id="tws" type="number" value="10" step="0.1" />
+            </div>
+            <div>
+              <label>Initial TWD (°T)</label>
+              <input id="twd" type="number" value="270" step="1" min="0" max="359" />
+            </div>
+          </div>
+        </div>
+
+        <div class="map-header" style="margin-top: 16px;">
+          <h3 style="margin: 0 0 4px 0;">Map</h3>
+          <p class="muted">Click on the map to set the starting lat/lon.</p>
+        </div>
+        <div id="map" class="map-canvas"></div>
+        </div>
+      </section>
+
+      <section class="controls card">
+        <h2 style="margin: 0 0 8px 0;">AIS Targets</h2>
+        <div class="switch-row" style="justify-content:flex-end;">
+          <span class="muted">Off</span>
+          <label class="switch">
+            <input id="ais_enabled" type="checkbox" checked />
+            <span class="slider"></span>
+          </label>
+          <span class="muted">On</span>
+        </div>
+        <div id="ais_fields" class="grid">
+          <div>
+            <label>Number of AIS targets</label>
+            <input id="ais_num_targets" type="number" min="0" value="20" />
+          </div>
+          <div>
+            <label>Max offset AIS COG (°)</label>
+            <input id="ais_max_cog_offset" type="number" min="0" step="1" value="20" />
+          </div>
+          <div>
+            <label>Max offset AIS SOG (kn)</label>
+            <input id="ais_max_sog_offset" type="number" min="0" step="0.1" value="2.0" />
+          </div>
+          <div>
+            <label>Random distribution radius (nm)</label>
+            <input id="ais_distribution_radius_nm" type="number" min="0" step="0.1" value="10.0" />
+          </div>
+        </div>
+      </section>
+
+      <section class="controls card">
+        <div class="section-header" style="margin: 0 0 8px 0;">
+          <h2 style="margin:0;">Auxiliary Data</h2>
           <div class="switch-row" style="justify-content:flex-end;">
             <span class="muted">Off</span>
             <label class="switch">
-              <input id="wind_enabled_toggle" type="checkbox" checked />
+              <input id="auxiliary_master_toggle" type="checkbox" checked />
               <span class="slider"></span>
             </label>
             <span class="muted">On</span>
           </div>
         </div>
-        <div id="wind_fields" class="grid">
-          <div>
-            <label>Initial TWS (kn)</label>
-            <input id="tws" type="number" value="10" step="0.1" />
+
+        <div id="auxiliary_panels">
+        <div class="card" style="margin: 16px 0 0 0; padding: 12px;">
+          <div class="section-header" style="margin: 0 0 8px 0;">
+            <h3 style="margin:0;">Water Depth</h3>
+            <div class="switch-row" style="justify-content:flex-end;">
+              <span class="muted">Off</span>
+              <label class="switch">
+                <input id="depth_enabled" type="checkbox" checked />
+                <span class="slider"></span>
+              </label>
+              <span class="muted">On</span>
+            </div>
           </div>
-          <div>
-            <label>Initial TWD (°T)</label>
-            <input id="twd" type="number" value="270" step="1" />
+          <div id="depth_fields" class="grid">
+            <div>
+              <label>Depth (m)</label>
+              <input id="depth_m" type="number" value="12.0" step="0.1" min="0" />
+            </div>
+            <div>
+              <label>Offset (m)</label>
+              <input id="depth_offset_m" type="number" value="0.3" step="0.1" />
+            </div>
           </div>
         </div>
 
-        <div class="section-header" style="margin: 16px 0 8px 0;">
-          <h2 style="margin:0;">Heading</h2>
-          <div class="switch-row" style="justify-content:flex-end;">
-            <span class="muted">HDT off</span>
-            <label class="switch">
-              <input id="heading_enabled" type="checkbox" />
-              <span class="slider"></span>
-            </label>
-            <span class="muted">HDT from COG</span>
+        <div class="card" style="margin: 16px 0 0 0; padding: 12px;">
+          <div class="section-header" style="margin: 0 0 8px 0;">
+            <h3 style="margin:0;">Water Temperature</h3>
+            <div class="switch-row" style="justify-content:flex-end;">
+              <span class="muted">Off</span>
+              <label class="switch">
+                <input id="water_temp_enabled" type="checkbox" checked />
+                <span class="slider"></span>
+              </label>
+              <span class="muted">On</span>
+            </div>
+          </div>
+          <div id="water_temp_fields" class="grid">
+            <div>
+              <label>Water Temp (°C)</label>
+              <input id="water_temp_c" type="number" value="18.0" step="0.1" />
+            </div>
           </div>
         </div>
 
-        <div class="section-header" style="margin: 16px 0 8px 0;">
-          <h2 style="margin:0;">Depth</h2>
-          <div class="switch-row" style="justify-content:flex-end;">
-            <span class="muted">Off</span>
-            <label class="switch">
-              <input id="depth_enabled" type="checkbox" />
-              <span class="slider"></span>
-            </label>
-            <span class="muted">On</span>
+        <div class="card" style="margin: 16px 0 0 0; padding: 12px;">
+          <div class="section-header" style="margin: 0 0 8px 0;">
+            <h3 style="margin:0;">Battery</h3>
+            <div class="switch-row" style="justify-content:flex-end;">
+              <span class="muted">Off</span>
+              <label class="switch">
+                <input id="battery_enabled" type="checkbox" checked />
+                <span class="slider"></span>
+              </label>
+              <span class="muted">On</span>
+            </div>
           </div>
-        </div>
-        <div id="depth_fields" class="grid" style="display:none;">
-          <div>
-            <label>Depth (m)</label>
-            <input id="depth_m" type="number" value="12.0" step="0.1" min="0" />
-          </div>
-          <div>
-            <label>Offset (m)</label>
-            <input id="depth_offset_m" type="number" value="0.3" step="0.1" />
-          </div>
-        </div>
-
-        <div class="section-header" style="margin: 16px 0 8px 0;">
-          <h2 style="margin:0;">Water Temperature</h2>
-          <div class="switch-row" style="justify-content:flex-end;">
-            <span class="muted">Off</span>
-            <label class="switch">
-              <input id="water_temp_enabled" type="checkbox" />
-              <span class="slider"></span>
-            </label>
-            <span class="muted">On</span>
-          </div>
-        </div>
-        <div id="water_temp_fields" class="grid" style="display:none;">
-          <div>
-            <label>Water Temp (°C)</label>
-            <input id="water_temp_c" type="number" value="18.0" step="0.1" />
+          <div id="battery_fields" class="grid">
+            <div>
+              <label>Battery (V)</label>
+              <input id="battery_v" type="number" value="12.7" step="0.1" min="0" />
+            </div>
           </div>
         </div>
 
-        <div class="section-header" style="margin: 16px 0 8px 0;">
-          <h2 style="margin:0;">Battery</h2>
-          <div class="switch-row" style="justify-content:flex-end;">
-            <span class="muted">Off</span>
-            <label class="switch">
-              <input id="battery_enabled" type="checkbox" />
-              <span class="slider"></span>
-            </label>
-            <span class="muted">On</span>
+        <div class="card" style="margin: 16px 0 0 0; padding: 12px;">
+          <div class="section-header" style="margin: 0 0 8px 0;">
+            <h3 style="margin:0;">Air Temperature</h3>
+            <div class="switch-row" style="justify-content:flex-end;">
+              <span class="muted">Off</span>
+              <label class="switch">
+                <input id="air_temp_enabled" type="checkbox" checked />
+                <span class="slider"></span>
+              </label>
+              <span class="muted">On</span>
+            </div>
           </div>
-        </div>
-        <div id="battery_fields" class="grid" style="display:none;">
-          <div>
-            <label>Battery (V)</label>
-            <input id="battery_v" type="number" value="12.7" step="0.1" min="0" />
-          </div>
-        </div>
-
-        <div class="section-header" style="margin: 16px 0 8px 0;">
-          <h2 style="margin:0;">Air Temperature</h2>
-          <div class="switch-row" style="justify-content:flex-end;">
-            <span class="muted">Off</span>
-            <label class="switch">
-              <input id="air_temp_enabled" type="checkbox" />
-              <span class="slider"></span>
-            </label>
-            <span class="muted">On</span>
-          </div>
-        </div>
-        <div id="air_temp_fields" class="grid" style="display:none;">
-          <div>
-            <label>Air Temp (°C)</label>
-            <input id="air_temp_c" type="number" value="23.0" step="0.1" />
+          <div id="air_temp_fields" class="grid">
+            <div>
+              <label>Air Temp (°C)</label>
+              <input id="air_temp_c" type="number" value="23.0" step="0.1" />
+            </div>
           </div>
         </div>
 
-        <div class="section-header" style="margin: 16px 0 8px 0;">
-          <h2 style="margin:0;">Tank Levels</h2>
-          <div class="switch-row" style="justify-content:flex-end;">
-            <span class="muted">Off</span>
-            <label class="switch">
-              <input id="tanks_enabled" type="checkbox" />
-              <span class="slider"></span>
-            </label>
-            <span class="muted">On</span>
+        <div class="card" style="margin: 16px 0 0 0; padding: 12px;">
+          <div class="section-header" style="margin: 0 0 8px 0;">
+            <h3 style="margin:0;">Tank Levels</h3>
+            <div class="switch-row" style="justify-content:flex-end;">
+              <span class="muted">Off</span>
+              <label class="switch">
+                <input id="tanks_enabled" type="checkbox" checked />
+                <span class="slider"></span>
+              </label>
+              <span class="muted">On</span>
+            </div>
           </div>
-        </div>
-        <div id="tanks_fields" class="grid" style="display:none;">
-          <div>
-            <label>Fresh Water (%)</label>
-            <input id="tank_fresh_water" type="number" value="75" step="1" min="0" max="100" />
-          </div>
-          <div>
-            <label>Fuel (%)</label>
-            <input id="tank_fuel" type="number" value="60" step="1" min="0" max="100" />
-          </div>
-          <div>
+          <div id="tanks_fields" class="grid">
+            <div>
+              <label>Fresh Water (%)</label>
+              <input id="tank_fresh_water" type="number" value="75" step="1" min="0" max="100" />
+            </div>
+            <div>
+              <label>Fuel (%)</label>
+              <input id="tank_fuel" type="number" value="60" step="1" min="0" max="100" />
+            </div>
+            <div>
             <label>Waste (%)</label>
             <input id="tank_waste" type="number" value="30" step="1" min="0" max="100" />
           </div>
         </div>
-
-        
+        </div>
+        </div>
       </section>
 
-      <section class="map card">
-        <div class="map-header">
-          <h2>Starting Position</h2>
-          <p class="muted">Click on the map to set the starting lat/lon.</p>
+      <section class="controls card">
+        <h2 style="margin: 0 0 8px 0;">Network</h2>
+        <div class="grid">
+          <div>
+            <label>UDP adress</label>
+            <input id="host" type="text" value="127.0.0.1" />
+          </div>
+          <div>
+            <label>UDP Port</label>
+            <input id="port" type="number" value="10110" min="1" max="65535" />
+          </div>
+          <div>
+            <label>TCP interface</label>
+            <input id="tcp_host" type="text" value="0.0.0.0" />
+          </div>
+          <div>
+            <label>TCP Port</label>
+            <input id="tcp_port" type="number" value="10111" min="1" max="65535" />
+          </div>
         </div>
-        <div id="map" class="map-canvas"></div>
       </section>
     </main>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="/static/js/header_controls.js"></script>
   <script src="/static/js/regatta_nmea_simulator.js"></script>
   </body>
 </html>
+

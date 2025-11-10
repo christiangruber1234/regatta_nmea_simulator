@@ -19,6 +19,7 @@ const twsEl = document.getElementById('tws');
 const twdEl = document.getElementById('twd');
 const magvarEl = document.getElementById('magvar');
 const headingEnabledEl = document.getElementById('heading_enabled');
+const headingFieldsEl = document.getElementById('heading_fields');
 const statusText = document.getElementById('statusText');
 
 // Sensor elements
@@ -43,7 +44,8 @@ const tankWasteEl = document.getElementById('tank_waste');
 
 const startBtn = document.getElementById('startBtn');
 const stopBtn = document.getElementById('stopBtn');
-const restartBtn = document.getElementById('restartBtn');
+const resetBtn = document.getElementById('resetBtn');
+const updateBtn = document.getElementById('updateBtn');
 const initModeToggle = document.getElementById('init_mode_toggle');
 const initModeEl = document.getElementById('init_mode'); // legacy select if present
 const gpxFileEl = document.getElementById('gpx_file');
@@ -88,14 +90,14 @@ function updateStartButtonLabelTick(){
   if (!startBtn) return;
   if (simStartedAtMs && !isNaN(simStartedAtMs)){
     const diff = Date.now() - simStartedAtMs;
-    startBtn.textContent = `RUNNING ${formatHMS(diff)}`;
+    startBtn.textContent = `▶ RUNNING ${formatHMS(diff)}`;
   } else {
-    startBtn.textContent = 'RUNNING';
+    startBtn.textContent = '▶ RUNNING';
   }
 }
 
 // Theme toggle
-const savedTheme = localStorage.getItem('theme') || 'light';
+const savedTheme = localStorage.getItem('theme') || 'dark';
 html.setAttribute('data-theme', savedTheme);
 function updateThemeIcon(){
   const isDark = html.getAttribute('data-theme') === 'dark';
@@ -158,19 +160,140 @@ let currentTiles = (savedTheme === 'dark') ? darkTiles : lightTiles;
 currentTiles.addTo(map);
 seamarkTiles.addTo(map);
 
-let marker = L.marker([parseFloat(latEl.value), parseFloat(lonEl.value)], {draggable: true}).addTo(map);
+let marker = L.marker([parseFloat(latEl.value), parseFloat(lonEl.value)], {
+  draggable: true,
+  zIndexOffset: 1000,
+  opacity: 0
+}).addTo(map);
 let currentMarker = null; // simulator current position when running
+let aisMarkers = new Map(); // mmsi -> marker for AIS targets
+
+// Boat heading marker
+let boatMarker = null;
+let boatHeadingMarker = null; // boat triangle showing COG
+let windArrowMarker = null; // wind arrow showing TWD
+
+// Create boat heading icon (triangle)
+function createBoatIcon(cog) {
+  const svg = `<svg width="80" height="80" xmlns="http://www.w3.org/2000/svg">
+    <g transform="translate(40,40) rotate(${cog})">
+      <line x1="0" y1="-15" x2="0" y2="-35" stroke="#3b82f6" stroke-width="2"/>
+      <path d="M 0,-15 L 8,12 L 0,8 L -8,12 Z" fill="#3b82f6" stroke="#1e40af" stroke-width="2"/>
+    </g>
+  </svg>`;
+  return L.divIcon({
+    html: svg,
+    className: 'boat-icon',
+    iconSize: [80, 80],
+    iconAnchor: [40, 40]
+  });
+}
+
+// Create wind arrow icon - arrow points TO the boat (wind coming FROM direction)
+function createWindIcon(twd, tws) {
+  const svg = `<svg width="160" height="160" xmlns="http://www.w3.org/2000/svg">
+    <g transform="translate(80,80) rotate(${twd})">
+      <line x1="0" y1="-60" x2="0" y2="25" stroke="#ffffff" stroke-width="3"/>
+      <polygon points="0,25 -6,15 6,15" fill="#ffffff"/>
+      <circle cx="0" cy="-60" r="3" fill="#ffffff"/>
+      <g transform="translate(0,-60)">
+        <rect x="-25" y="-25" width="50" height="20" fill="rgba(0,0,0,0.8)" rx="4"/>
+        <text x="0" y="-8" font-size="13" fill="#ffffff" font-weight="bold" text-anchor="middle">${Math.round(tws)}kn</text>
+      </g>
+    </g>
+  </svg>`;
+  return L.divIcon({
+    html: svg,
+    className: 'wind-icon',
+    iconSize: [160, 160],
+    iconAnchor: [80, 80]
+  });
+}
+
+// Update boat heading marker
+function updateBoatHeading() {
+  const lat = parseFloat(latEl.value);
+  const lon = parseFloat(lonEl.value);
+  const cog = parseFloat(cogEl.value) || 0;
+  
+  if (isNaN(lat) || isNaN(lon)) return;
+  
+  if (!boatHeadingMarker) {
+    boatHeadingMarker = L.marker([lat, lon], {
+      icon: createBoatIcon(cog),
+      interactive: false,
+      zIndexOffset: 100
+    }).addTo(map);
+  } else {
+    boatHeadingMarker.setLatLng([lat, lon]);
+    boatHeadingMarker.setIcon(createBoatIcon(cog));
+  }
+}
+
+// Update wind arrow marker
+function updateWindArrow() {
+  const lat = parseFloat(latEl.value);
+  const lon = parseFloat(lonEl.value);
+  const twd = parseFloat(twdEl.value) || 0;
+  const tws = parseFloat(twsEl.value) || 0;
+  const windEnabled = windToggleEl && windToggleEl.checked;
+  
+  if (!windEnabled || isNaN(lat) || isNaN(lon)) {
+    if (windArrowMarker) {
+      map.removeLayer(windArrowMarker);
+      windArrowMarker = null;
+    }
+    return;
+  }
+  
+  if (!windArrowMarker) {
+    windArrowMarker = L.marker([lat, lon], {
+      icon: createWindIcon(twd, tws),
+      interactive: false,
+      zIndexOffset: 50
+    }).addTo(map);
+  } else {
+    windArrowMarker.setLatLng([lat, lon]);
+    windArrowMarker.setIcon(createWindIcon(twd, tws));
+  }
+}
+
+// Initial update
+updateBoatHeading();
+updateWindArrow();
 
 function syncInputsFromMarker(){
   const {lat, lng} = marker.getLatLng();
   latEl.value = lat.toFixed(6);
   lonEl.value = lng.toFixed(6);
+  updateBoatHeading();
+  updateWindArrow();
 }
 marker.on('dragend', syncInputsFromMarker);
 map.on('click', (e) => {
   marker.setLatLng(e.latlng);
   syncInputsFromMarker();
 });
+
+// Add listeners to update boat heading and wind arrow
+if (cogEl) cogEl.addEventListener('input', updateBoatHeading);
+if (twdEl) twdEl.addEventListener('input', updateWindArrow);
+if (twsEl) twsEl.addEventListener('input', updateWindArrow);
+if (windToggleEl) windToggleEl.addEventListener('change', updateWindArrow);
+
+// TWD wraparound: if value goes above 359, wrap to 0
+if (twdEl) {
+  twdEl.addEventListener('input', function() {
+    let val = parseFloat(twdEl.value);
+    if (!isNaN(val)) {
+      if (val > 359) {
+        twdEl.value = 0;
+      } else if (val < 0) {
+        twdEl.value = 359;
+      }
+    }
+  });
+}
 
 // Mode toggle for Initial parameters
 function getInitMode(){
@@ -388,6 +511,119 @@ async function refreshStatus(){
   try {
     const data = await api('GET', '/api/status');
     const running = !!data.running;
+    
+    // Track running state and show/hide update button
+    const wasRunning = isSimulatorRunning;
+    isSimulatorRunning = running;
+    
+    // Sync UI with actual simulator state (enabled/disabled toggles and current values)
+    // Skip fields that were recently updated by the user to prevent overwriting their changes
+    if (running && data) {
+      // Update Starting Conditions panel - skip if recently updated
+      if (typeof data.lat === 'number' && latEl && !recentlyUpdatedFields.has('lat')) {
+        latEl.value = data.lat.toFixed(6);
+      }
+      if (typeof data.lon === 'number' && lonEl && !recentlyUpdatedFields.has('lon')) {
+        lonEl.value = data.lon.toFixed(6);
+      }
+      if (typeof data.interval === 'number' && intervalEl && !recentlyUpdatedFields.has('interval')) {
+        intervalEl.value = data.interval;
+      }
+      if (typeof data.interval === 'number' && intervalGpxEl && !recentlyUpdatedFields.has('interval_gpx')) {
+        intervalGpxEl.value = data.interval;
+      }
+      if (data.sim_time && startDtEl && !recentlyUpdatedFields.has('start_datetime')) {
+        // Convert UTC time string to local datetime-local format
+        try {
+          const utcDate = new Date(data.sim_time);
+          if (!isNaN(utcDate.getTime())) {
+            // Format as YYYY-MM-DDTHH:MM:SS for datetime-local input
+            const year = utcDate.getFullYear();
+            const month = String(utcDate.getMonth() + 1).padStart(2, '0');
+            const day = String(utcDate.getDate()).padStart(2, '0');
+            const hours = String(utcDate.getHours()).padStart(2, '0');
+            const minutes = String(utcDate.getMinutes()).padStart(2, '0');
+            const seconds = String(utcDate.getSeconds()).padStart(2, '0');
+            startDtEl.value = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
+          }
+        } catch(e) {}
+      }
+      
+      // Update enable/disable toggles - skip if recently updated
+      if (headingEnabledEl && headingEnabledEl.checked !== data.heading_enabled && !recentlyUpdatedFields.has('heading_enabled')) {
+        headingEnabledEl.checked = data.heading_enabled;
+      }
+      if (depthEnabledEl && depthEnabledEl.checked !== data.depth_enabled && !recentlyUpdatedFields.has('depth_enabled')) {
+        depthEnabledEl.checked = data.depth_enabled;
+        updateDepthUI();
+      }
+      if (waterTempEnabledEl && waterTempEnabledEl.checked !== data.water_temp_enabled && !recentlyUpdatedFields.has('water_temp_enabled')) {
+        waterTempEnabledEl.checked = data.water_temp_enabled;
+        updateWaterTempUI();
+      }
+      if (batteryEnabledEl && batteryEnabledEl.checked !== data.battery_enabled && !recentlyUpdatedFields.has('battery_enabled')) {
+        batteryEnabledEl.checked = data.battery_enabled;
+        updateBatteryUI();
+      }
+      if (airTempEnabledEl && airTempEnabledEl.checked !== data.air_temp_enabled && !recentlyUpdatedFields.has('air_temp_enabled')) {
+        airTempEnabledEl.checked = data.air_temp_enabled;
+        updateAirTempUI();
+      }
+      if (tanksEnabledEl && tanksEnabledEl.checked !== data.tanks_enabled && !recentlyUpdatedFields.has('tanks_enabled')) {
+        tanksEnabledEl.checked = data.tanks_enabled;
+        updateTanksUI();
+      }
+      if (windToggleEl && windToggleEl.checked !== data.wind_enabled && !recentlyUpdatedFields.has('wind_enabled_toggle')) {
+        windToggleEl.checked = data.wind_enabled;
+        updateWindUI();
+      }
+      
+      // Update current values from simulator - skip if recently updated
+      if (typeof data.sog === 'number' && sogEl && !recentlyUpdatedFields.has('sog')) {
+        sogEl.value = data.sog.toFixed(1);
+      }
+      if (typeof data.cog === 'number' && cogEl && !recentlyUpdatedFields.has('cog')) {
+        cogEl.value = Math.round(data.cog);
+      }
+      if (typeof data.tws === 'number' && twsEl && !recentlyUpdatedFields.has('tws')) {
+        twsEl.value = data.tws.toFixed(1);
+      }
+      if (typeof data.twd === 'number' && twdEl && !recentlyUpdatedFields.has('twd')) {
+        twdEl.value = Math.round(data.twd);
+      }
+      if (typeof data.magvar === 'number' && magvarEl && !recentlyUpdatedFields.has('magvar')) {
+        magvarEl.value = data.magvar;
+      }
+      if (typeof data.depth_m === 'number' && depthMEl && !recentlyUpdatedFields.has('depth_m')) {
+        depthMEl.value = data.depth_m.toFixed(1);
+      }
+      if (typeof data.depth_offset_m === 'number' && depthOffsetMEl && !recentlyUpdatedFields.has('depth_offset_m')) {
+        depthOffsetMEl.value = data.depth_offset_m.toFixed(1);
+      }
+      if (typeof data.water_temp_c === 'number' && waterTempCEl && !recentlyUpdatedFields.has('water_temp_c')) {
+        waterTempCEl.value = data.water_temp_c.toFixed(1);
+      }
+      if (typeof data.battery_v === 'number' && batteryVEl && !recentlyUpdatedFields.has('battery_v')) {
+        batteryVEl.value = data.battery_v.toFixed(1);
+      }
+      if (typeof data.air_temp_c === 'number' && airTempCEl && !recentlyUpdatedFields.has('air_temp_c')) {
+        airTempCEl.value = data.air_temp_c.toFixed(1);
+      }
+      if (typeof data.tank_fresh_water === 'number' && tankFreshWaterEl && !recentlyUpdatedFields.has('tank_fresh_water')) {
+        tankFreshWaterEl.value = data.tank_fresh_water.toFixed(1);
+      }
+      if (typeof data.tank_fuel === 'number' && tankFuelEl && !recentlyUpdatedFields.has('tank_fuel')) {
+        tankFuelEl.value = data.tank_fuel.toFixed(1);
+      }
+      if (typeof data.tank_waste === 'number' && tankWasteEl && !recentlyUpdatedFields.has('tank_waste')) {
+        tankWasteEl.value = data.tank_waste.toFixed(1);
+      }
+      
+      // Update map markers with current values
+      updateBoatHeading();
+      updateWindArrow();
+    }
+    
     if (statusText) {
       statusText.textContent = running ? `Status: Running (lat=${(data.lat||0).toFixed?.(4)}, lon=${(data.lon||0).toFixed?.(4)}, port=${data.port})` : 'Status: Stopped';
     }
@@ -419,7 +655,7 @@ async function refreshStatus(){
         // Clear ticker and reset label/styles
         if (runningTicker) { clearInterval(runningTicker); runningTicker = null; }
         simStartedAtMs = null;
-        startBtn.textContent = 'Start';
+        startBtn.textContent = '▶ Start';
         startBtn.classList.remove('btn-running');
         try { localStorage.removeItem('sim.startedAtEpoch'); } catch(e){}
       }
@@ -448,6 +684,38 @@ async function refreshStatus(){
         map.removeLayer(currentMarker);
         currentMarker = null;
       }
+    }
+
+    // Update AIS targets on map when running
+    if (running && data.ais && data.ais.targets) {
+      const ais = data.ais.targets || [];
+      const seen = new Set();
+      for (const t of ais) {
+        seen.add(String(t.mmsi));
+        const latLng = [t.lat, t.lon];
+        let m = aisMarkers.get(String(t.mmsi));
+        if (!m) {
+          m = L.circleMarker(latLng, { radius: 5, color: '#1e90ff', fillColor: '#1e90ff', fillOpacity: 0.9 }).addTo(map);
+          m.bindTooltip(`${t.display_name || (t.name || 'Vessel')}\nMMSI ${t.mmsi}`);
+          aisMarkers.set(String(t.mmsi), m);
+        } else {
+          m.setLatLng(latLng);
+          m.setTooltipContent(`${t.display_name || (t.name || 'Vessel')}\nMMSI ${t.mmsi}`);
+        }
+      }
+      // Remove stale markers
+      for (const [k, m] of aisMarkers) {
+        if (!seen.has(k)) {
+          map.removeLayer(m);
+          aisMarkers.delete(k);
+        }
+      }
+    } else {
+      // Clear all AIS markers when stopped
+      for (const [k, m] of aisMarkers) {
+        map.removeLayer(m);
+      }
+      aisMarkers.clear();
     }
 
     // Sync GPX slider to simulation progress when running
@@ -503,6 +771,18 @@ async function start(){
     twd: parseFloat(twdEl.value),
     magvar: parseFloat(magvarEl.value),
   };
+  // Add AIS parameters
+  const aisEnabledEl = document.getElementById('ais_enabled');
+  const aisNumEl = document.getElementById('ais_num_targets');
+  const aisCogEl = document.getElementById('ais_max_cog_offset');
+  const aisSogEl = document.getElementById('ais_max_sog_offset');
+  const aisRadiusEl = document.getElementById('ais_distribution_radius_nm');
+  if (aisEnabledEl) body.ais_enabled = !!aisEnabledEl.checked;
+  if (aisNumEl) body.ais_num_targets = parseInt(aisNumEl.value, 10);
+  if (aisCogEl) body.ais_max_cog_offset = parseFloat(aisCogEl.value);
+  if (aisSogEl) body.ais_max_sog_offset = parseFloat(aisSogEl.value);
+  if (aisRadiusEl) body.ais_distribution_radius_nm = parseFloat(aisRadiusEl.value);
+  
   if (getInitMode()==='gpx' && currentGpxId){
     body.gpx_id = currentGpxId;
     if (currentGpxMeta && currentGpxMeta.has_time){ body.gpx_offset_s = gpxSelectedOffsetS; }
@@ -510,11 +790,13 @@ async function start(){
   }
   await api('POST', '/api/start', body);
   await refreshStatus();
+  if (window.updateHeaderButtonState) await window.updateHeaderButtonState();
 }
 
 async function stop(){
   await api('POST', '/api/stop', {});
   await refreshStatus();
+  if (window.updateHeaderButtonState) await window.updateHeaderButtonState();
 }
 
 async function restart(){
@@ -548,6 +830,18 @@ async function restart(){
     twd: parseFloat(twdEl.value),
     magvar: parseFloat(magvarEl.value),
   };
+  // Add AIS parameters
+  const aisEnabledEl = document.getElementById('ais_enabled');
+  const aisNumEl = document.getElementById('ais_num_targets');
+  const aisCogEl = document.getElementById('ais_max_cog_offset');
+  const aisSogEl = document.getElementById('ais_max_sog_offset');
+  const aisRadiusEl = document.getElementById('ais_distribution_radius_nm');
+  if (aisEnabledEl) body.ais_enabled = !!aisEnabledEl.checked;
+  if (aisNumEl) body.ais_num_targets = parseInt(aisNumEl.value, 10);
+  if (aisCogEl) body.ais_max_cog_offset = parseFloat(aisCogEl.value);
+  if (aisSogEl) body.ais_max_sog_offset = parseFloat(aisSogEl.value);
+  if (aisRadiusEl) body.ais_distribution_radius_nm = parseFloat(aisRadiusEl.value);
+  
   if (getInitMode()==='gpx' && currentGpxId){
     body.gpx_id = currentGpxId;
     if (currentGpxMeta && currentGpxMeta.has_time){ body.gpx_offset_s = gpxSelectedOffsetS; }
@@ -555,14 +849,212 @@ async function restart(){
   }
   await api('POST', '/api/restart', body);
   await refreshStatus();
+  if (window.updateHeaderButtonState) await window.updateHeaderButtonState();
+}
+
+async function resetToDefaults() {
+  // Stop simulator if running
+  if (isSimulatorRunning) {
+    await stop();
+  }
+  
+  // Reset all fields to their default values
+  if (latEl) latEl.value = '42.715769349296004';
+  if (lonEl) lonEl.value = '16.23217374761267';
+  if (startDtEl) startDtEl.value = '';
+  if (intervalEl) intervalEl.value = '1.0';
+  if (intervalGpxEl) intervalGpxEl.value = '1.0';
+  if (sogEl) sogEl.value = '5';
+  if (cogEl) cogEl.value = '185';
+  if (twsEl) twsEl.value = '10';
+  if (twdEl) twdEl.value = '270';
+  if (magvarEl) magvarEl.value = '-2.5';
+  
+  // Reset toggles
+  if (windToggleEl) { windToggleEl.checked = true; updateWindUI(); }
+  if (headingEnabledEl) { headingEnabledEl.checked = true; updateHeadingUI(); }
+  
+  // Reset auxiliary sensors
+  if (depthEnabledEl) { depthEnabledEl.checked = true; updateDepthUI(); }
+  if (depthMEl) depthMEl.value = '12.0';
+  if (depthOffsetMEl) depthOffsetMEl.value = '0.3';
+  
+  if (waterTempEnabledEl) { waterTempEnabledEl.checked = true; updateWaterTempUI(); }
+  if (waterTempCEl) waterTempCEl.value = '18.0';
+  
+  if (batteryEnabledEl) { batteryEnabledEl.checked = true; updateBatteryUI(); }
+  if (batteryVEl) batteryVEl.value = '12.7';
+  
+  if (airTempEnabledEl) { airTempEnabledEl.checked = true; updateAirTempUI(); }
+  if (airTempCEl) airTempCEl.value = '20.0';
+  
+  if (tanksEnabledEl) { tanksEnabledEl.checked = true; updateTanksUI(); }
+  if (tankFreshWaterEl) tankFreshWaterEl.value = '75';
+  if (tankFuelEl) tankFuelEl.value = '60';
+  if (tankWasteEl) tankWasteEl.value = '30';
+  
+  // Reset AIS
+  const aisEnabledEl = document.getElementById('ais_enabled');
+  const aisNumEl = document.getElementById('ais_num_targets');
+  const aisCogEl = document.getElementById('ais_max_cog_offset');
+  const aisSogEl = document.getElementById('ais_max_sog_offset');
+  const aisRadiusEl = document.getElementById('ais_distribution_radius_nm');
+  if (aisEnabledEl) { aisEnabledEl.checked = true; updateAisUI(); }
+  if (aisNumEl) aisNumEl.value = '20';
+  if (aisCogEl) aisCogEl.value = '20';
+  if (aisSogEl) aisSogEl.value = '2.0';
+  if (aisRadiusEl) aisRadiusEl.value = '10.0';
+  
+  // Reset network settings
+  if (hostEl) hostEl.value = 'localhost';
+  if (portEl) portEl.value = '10110';
+  if (tcpPortEl) tcpPortEl.value = '10111';
+  if (tcpHostEl) tcpHostEl.value = '0.0.0.0';
+  
+  // Update map markers
+  updateBoatHeading();
+  updateWindArrow();
+  
+  // Reset map view to default position
+  if (map && latEl && lonEl) {
+    map.setView([parseFloat(latEl.value), parseFloat(lonEl.value)], 10);
+    if (marker) {
+      marker.setLatLng([parseFloat(latEl.value), parseFloat(lonEl.value)]);
+    }
+  }
+}
+
+// Track if simulator is running and recently updated fields
+let isSimulatorRunning = false;
+let recentlyUpdatedFields = new Set(); // Track fields that were just updated by user
+let updateTimeouts = new Map(); // Debounce timeouts for each field
+
+// Flash the running badge green when update is sent
+function flashRunningBadge() {
+  if (startBtn && startBtn.classList.contains('btn-running')) {
+    startBtn.style.transition = 'background-color 0.3s ease';
+    const originalBg = startBtn.style.backgroundColor;
+    startBtn.style.backgroundColor = '#22c55e'; // green-500
+    setTimeout(() => {
+      startBtn.style.backgroundColor = originalBg;
+      setTimeout(() => {
+        startBtn.style.transition = '';
+      }, 300);
+    }, 300);
+  }
+}
+
+// Send live update to simulator when a value changes
+async function sendLiveUpdate() {
+  if (!isSimulatorRunning) return;
+  
+  const body = {
+    host: hostEl.value,
+    port: parseInt(portEl.value, 10),
+    tcp_port: parseInt(tcpPortEl.value, 10),
+    tcp_host: tcpHostEl ? tcpHostEl.value : '0.0.0.0',
+    interval: parseFloat((getInitMode()==='gpx' ? intervalGpxEl.value : intervalEl.value)),
+    wind_enabled: getWindEnabled(),
+    heading_enabled: headingEnabledEl ? !!headingEnabledEl.checked : false,
+    depth_enabled: depthEnabledEl ? !!depthEnabledEl.checked : false,
+    depth_m: depthMEl ? parseFloat(depthMEl.value) : 12.0,
+    depth_offset_m: depthOffsetMEl ? parseFloat(depthOffsetMEl.value) : 0.3,
+    water_temp_enabled: waterTempEnabledEl ? !!waterTempEnabledEl.checked : false,
+    water_temp_c: waterTempCEl ? parseFloat(waterTempCEl.value) : 18.0,
+    battery_enabled: batteryEnabledEl ? !!batteryEnabledEl.checked : false,
+    battery_v: batteryVEl ? parseFloat(batteryVEl.value) : 12.5,
+    air_temp_enabled: airTempEnabledEl ? !!airTempEnabledEl.checked : false,
+    air_temp_c: airTempCEl ? parseFloat(airTempCEl.value) : 20.0,
+    tanks_enabled: tanksEnabledEl ? !!tanksEnabledEl.checked : false,
+    tank_fresh_water: tankFreshWaterEl ? parseFloat(tankFreshWaterEl.value) : 80.0,
+    tank_fuel: tankFuelEl ? parseFloat(tankFuelEl.value) : 60.0,
+    tank_waste: tankWasteEl ? parseFloat(tankWasteEl.value) : 15.0,
+    lat: parseFloat(latEl.value),
+    lon: parseFloat(lonEl.value),
+    start_datetime: startDtEl.value ? new Date(startDtEl.value).toISOString() : null,
+    sog: parseFloat(sogEl.value),
+    cog: parseFloat(cogEl.value),
+    tws: parseFloat(twsEl.value),
+    twd: parseFloat(twdEl.value),
+    magvar: parseFloat(magvarEl.value),
+  };
+  
+  // Add AIS parameters
+  const aisEnabledEl = document.getElementById('ais_enabled');
+  const aisNumEl = document.getElementById('ais_num_targets');
+  const aisCogEl = document.getElementById('ais_max_cog_offset');
+  const aisSogEl = document.getElementById('ais_max_sog_offset');
+  const aisRadiusEl = document.getElementById('ais_distribution_radius_nm');
+  if (aisEnabledEl) body.ais_enabled = !!aisEnabledEl.checked;
+  if (aisNumEl) body.ais_num_targets = parseInt(aisNumEl.value, 10);
+  if (aisCogEl) body.ais_max_cog_offset = parseFloat(aisCogEl.value);
+  if (aisSogEl) body.ais_max_sog_offset = parseFloat(aisSogEl.value);
+  if (aisRadiusEl) body.ais_distribution_radius_nm = parseFloat(aisRadiusEl.value);
+  
+  if (getInitMode()==='gpx' && currentGpxId){
+    body.gpx_id = currentGpxId;
+    if (currentGpxMeta && currentGpxMeta.has_time){ body.gpx_offset_s = gpxSelectedOffsetS; }
+    else { body.gpx_start_fraction = gpxSelectedFraction; }
+  }
+  
+  try {
+    await api('POST', '/api/restart', body);
+    flashRunningBadge();
+  } catch(e) {
+    console.error('Live update failed:', e);
+  }
+}
+
+// Handle field changes with debouncing
+function handleFieldChange(fieldId) {
+  if (!isSimulatorRunning) return;
+  
+  // Mark this field as recently updated
+  recentlyUpdatedFields.add(fieldId);
+  
+  // Clear any existing timeout for this field
+  if (updateTimeouts.has(fieldId)) {
+    clearTimeout(updateTimeouts.get(fieldId));
+  }
+  
+  // Set a debounce timeout - wait 500ms after last change before sending update
+  const timeout = setTimeout(async () => {
+    await sendLiveUpdate();
+    // Keep field marked as recently updated for 3 seconds to prevent overwrite during next refresh
+    setTimeout(() => {
+      recentlyUpdatedFields.delete(fieldId);
+    }, 3000);
+  }, 500);
+  
+  updateTimeouts.set(fieldId, timeout);
+}
+
+// Add change listeners to all input fields for live updates
+function setupLiveUpdates() {
+  const inputs = document.querySelectorAll('input, select');
+  inputs.forEach(input => {
+    // Skip the GPX file input as it triggers different flow
+    if (input.id === 'gpx_file') return;
+    
+    input.addEventListener('change', () => handleFieldChange(input.id));
+    input.addEventListener('input', () => {
+      // Only handle input events for text-like inputs (not checkboxes/radios)
+      if (input.type !== 'checkbox' && input.type !== 'radio') {
+        handleFieldChange(input.id);
+      }
+    });
+  });
 }
 
 startBtn.addEventListener('click', () => start().catch(err => alert(err.message)));
 stopBtn.addEventListener('click', () => stop().catch(err => alert(err.message)));
-restartBtn.addEventListener('click', () => restart().catch(err => alert(err.message)));
+resetBtn.addEventListener('click', () => resetToDefaults().catch(err => alert(err.message)));
 
 refreshStatus();
 setInterval(refreshStatus, 2000);
+
+// Setup live updates after page loads
+setupLiveUpdates();
 
 function getWindEnabled(){
   if (windToggleEl) return !!windToggleEl.checked;
@@ -577,6 +1069,14 @@ function updateWindUI(){
 if (windToggleEl){ windToggleEl.addEventListener('change', updateWindUI); }
 if (windSelectEl){ windSelectEl.addEventListener('change', updateWindUI); }
 updateWindUI();
+
+// Heading UI show/hide
+function updateHeadingUI(){
+  const on = headingEnabledEl && headingEnabledEl.checked;
+  if (headingFieldsEl){ headingFieldsEl.style.display = on ? '' : 'none'; }
+}
+if (headingEnabledEl){ headingEnabledEl.addEventListener('change', updateHeadingUI); }
+updateHeadingUI();
 
 // Sensor UI show/hide
 function updateDepthUI(){
@@ -599,14 +1099,43 @@ function updateTanksUI(){
   const on = tanksEnabledEl && tanksEnabledEl.checked;
   if (tanksFieldsEl){ tanksFieldsEl.style.display = on ? '' : 'none'; }
 }
+function updateAisUI(){
+  const aisEnabledEl = document.getElementById('ais_enabled');
+  const aisFieldsEl = document.getElementById('ais_fields');
+  const on = aisEnabledEl && aisEnabledEl.checked;
+  if (aisFieldsEl){ aisFieldsEl.style.display = on ? '' : 'none'; }
+}
 if (depthEnabledEl){ depthEnabledEl.addEventListener('change', updateDepthUI); }
 if (waterTempEnabledEl){ waterTempEnabledEl.addEventListener('change', updateWaterTempUI); }
 if (batteryEnabledEl){ batteryEnabledEl.addEventListener('change', updateBatteryUI); }
 if (airTempEnabledEl){ airTempEnabledEl.addEventListener('change', updateAirTempUI); }
 if (tanksEnabledEl){ tanksEnabledEl.addEventListener('change', updateTanksUI); }
+const aisEnabledEl = document.getElementById('ais_enabled');
+if (aisEnabledEl){ aisEnabledEl.addEventListener('change', updateAisUI); }
+
+// Auxiliary Data master toggle - controls all auxiliary sensors
+const auxiliaryMasterToggle = document.getElementById('auxiliary_master_toggle');
+const auxiliaryPanels = document.getElementById('auxiliary_panels');
+if (auxiliaryMasterToggle) {
+  auxiliaryMasterToggle.addEventListener('change', function() {
+    const isOn = auxiliaryMasterToggle.checked;
+    // Show/hide all sub-panels
+    if (auxiliaryPanels) {
+      auxiliaryPanels.style.display = isOn ? '' : 'none';
+    }
+    // Toggle all sensor checkboxes
+    if (depthEnabledEl) { depthEnabledEl.checked = isOn; updateDepthUI(); }
+    if (waterTempEnabledEl) { waterTempEnabledEl.checked = isOn; updateWaterTempUI(); }
+    if (batteryEnabledEl) { batteryEnabledEl.checked = isOn; updateBatteryUI(); }
+    if (airTempEnabledEl) { airTempEnabledEl.checked = isOn; updateAirTempUI(); }
+    if (tanksEnabledEl) { tanksEnabledEl.checked = isOn; updateTanksUI(); }
+  });
+}
+
 updateDepthUI();
 updateWaterTempUI();
 updateBatteryUI();
 updateAirTempUI();
 updateTanksUI();
+updateAisUI();
 
