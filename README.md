@@ -3,7 +3,16 @@
 A feature-rich NMEA 0183 simulator with a web UI, UDP/TCP output, AIS target simulation, GPX track playback, and live maps with seamarks. Perfect for testing marine navigation applications, chart plotters, and instrument displays.
 
 **Author:** Christian Heiling  
-**License:** MIT
+**License:** MIT  
+**Repository:** [github.com/christiangruber1234/regatta_nmea_simulator](https://github.com/christiangruber1234/regatta_nmea_simulator)
+
+## Screenshots
+
+### Simulator Page
+![Simulator Page](screenshot_simulator.png)
+
+### Status Page
+![Status Page](screenshot_status.png)
 
 ## Features
 
@@ -723,7 +732,9 @@ This simulator is ideal for:
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit issues, feature requests, or pull requests.
+Contributions are welcome! Please feel free to submit issues, feature requests, or pull requests on GitHub.
+
+**Repository:** [github.com/christiangruber1234/regatta_nmea_simulator](https://github.com/christiangruber1234/regatta_nmea_simulator)
 
 ## Acknowledgments
 
